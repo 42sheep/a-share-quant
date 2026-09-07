@@ -66,46 +66,33 @@ async function loadWatchlist() {
       return;
     }
 
-    let html = `<table class="table">
-      <thead><tr>
-        <th>股票</th>
-        <th>最新价</th>
-        <th>涨跌幅</th>
-        <th>涨跌额</th>
-        <th>今开</th>
-        <th>最高</th>
-        <th>最低</th>
-        <th>成交量</th>
-        <th>成交额</th>
-        <th>换手率</th>
-        <th>操作</th>
-      </tr></thead><tbody>`;
-
+    let html = '<div class="watchlist-cards">';
     for (const s of stocks) {
       const cls = changeClass(s.change_pct);
       const sign = s.change_pct > 0 ? '+' : '';
-      html += `<tr>
-        <td>
-          <div style="font-weight:600;cursor:pointer;color:var(--accent)" onclick="location.href='/stock/${s.symbol}'">${s.name}</div>
-          <div style="font-size:12px;color:var(--text-muted)">${s.symbol.toUpperCase()}</div>
-        </td>
-        <td style="font-weight:600;font-size:16px">${fmtNum(s.price)}</td>
-        <td class="${cls}" style="font-weight:600">${sign}${fmtNum(s.change_pct)}%</td>
-        <td class="${cls}">${sign}${fmtNum(s.change)}</td>
-        <td>${fmtNum(s.open)}</td>
-        <td>${fmtNum(s.high)}</td>
-        <td>${fmtNum(s.low)}</td>
-        <td>${fmtVolume(s.volume)}</td>
-        <td>${fmtAmount(s.amount)}</td>
-        <td>${fmtNum(s.turnover)}%</td>
-        <td>
+      html += `<div class="watchlist-card" onclick="location.href='/stock/${s.symbol}'">
+        <div class="wc-header">
+          <div class="wc-name">${s.name}<span class="wc-code">${s.symbol.toUpperCase()}</span></div>
+          <div class="wc-price">
+            <div class="wc-price-val">${fmtNum(s.price)}</div>
+            <div class="wc-change ${cls}">${sign}${fmtNum(s.change_pct)}%</div>
+          </div>
+        </div>
+        <div class="wc-meta">
+          <span>开 ${fmtNum(s.open)}</span>
+          <span>高 ${fmtNum(s.high)}</span>
+          <span>低 ${fmtNum(s.low)}</span>
+          <span>量 ${fmtVolume(s.volume)}</span>
+          <span>换手 ${fmtNum(s.turnover)}%</span>
+        </div>
+        <div class="wc-actions" onclick="event.stopPropagation()">
           <button class="btn btn-sm btn-primary" onclick="location.href='/stock/${s.symbol}'">分析</button>
           <button class="btn btn-sm btn-danger" onclick="removeStock('${s.symbol}')">删除</button>
-        </td>
-      </tr>`;
+        </div>
+      </div>`;
     }
-    html += '</tbody></table>';
-    document.getElementById('watchlistContent').innerHTML = '<div class="table-wrapper">' + html + '</div>';
+    html += '</div>';
+    document.getElementById('watchlistContent').innerHTML = html;
   } catch (e) {
     document.getElementById('watchlistContent').innerHTML = `<div class="empty-state"><p>加载失败：${e.message}</p></div>`;
   }

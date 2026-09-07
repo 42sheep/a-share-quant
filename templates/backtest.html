@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% block title %}回测统计 - 选股效果验证{% endblock %}
+{% block content %}
+<style>
+  .bt-header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .bt-header h2 {
+    margin: 0 0 6px 0;
+    font-size: 20px;
+    color: #5dade2;
+  }
+  .bt-header .subtitle {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-size: 24px;
+    font-weight: 700;
+  }
+  .stat-card .value.red { color: #ff4757; }
+  .stat-card .value.green { color: #2ed573; }
+  .stat-card .value.blue { color: #5dade2; }
+  .stat-card .value.orange { color: #f39c12; }
+  .stat-card .sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .type-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .type-tab {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+  .type-tab.active {
+    background: #5dade2;
+    color: white;
+    border-color: #5dade2;
+  }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 20px 0 12px 0;
+    padding-left: 10px;
+    border-left: 3px solid #5dade2;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .btn-run {
+    background: #5dade2;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-run:hover:not(:disabled) {
+    background: #3498db;
+  }
+  .btn-run:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .pending-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .pending-item .info {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .pending-item .type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 8px;
+  }
+  .type-yaogu { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+  .type-ai_screen { background: rgba(93,173,226,0.2); color: #5dade2; }
+  .history-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .history-date {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .history-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .history-meta .red-rate { color: #ff4757; font-weight: 600; }
+  .history-meta .limit-rate { color: #f39c12; font-weight: 600; }
+  .history-meta .avg { color: #5dade2; font-weight: 600; }
+  .stock-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .stock-tag {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .stock-tag.red {
+    background: rgba(255, 71, 87, 0.15);
+    color: #ff4757;
+    border: 1px solid rgba(255, 71, 87, 0.3);
+  }
+  .stock-tag.green {
+    background: rgba(46, 213, 115, 0.15);
+    color: #2ed573;
+    border: 1px solid rgba(46, 213, 115, 0.3);
+  }
+  .stock-tag.limit-up {
+    background: rgba(255, 71, 87, 0.3);
+    color: #ff4757;
+    border: 1px solid #ff4757;
+    font-weight: 700;
+  }
+  .stock-tag:hover {
+    transform: translateY(-1px);
+  }
+  .empty-box {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .disclaimer {
+    background: rgba(93, 173, 226, 0.1);
+    border-left: 3px solid #5dade2;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #85c1e9;
+    line-height: 1.6;
+    margin-top: 20px;
+  }
+  .loading-box {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+  }
+</style>
+
+<div class="bt-header">
+  <h2>📊 回测统计 - 选股效果验证</h2>
+  <div class="subtitle">自动记录每次选股结果，次日回测红盘率和涨停率，验证选股策略有效性</div>
+</div>
+
+<!-- 总统计 -->
+<div class="stats-grid" id="overallStats">
+  <div class="stat-card"><div class="label">选股次数</div><div class="value blue" id="statRecords">-</div><div class="sub">妖股+AI选股</div></div>
+  <div class="stat-card"><div class="label">累计股票数</div><div class="value" id="statStocks">-</div><div class="sub">所有选股记录</div></div>
+  <div class="stat-card"><div class="label">红盘率</div><div class="value red" id="statRedRate">-</div><div class="sub" id="statRedDetail">-</div></div>
+  <div class="stat-card"><div class="label">涨停率</div><div class="value orange" id="statLimitRate">-</div><div class="sub" id="statLimitDetail">-</div></div>
+  <div class="stat-card"><div class="label">平均次日收益</div><div class="value green" id="statAvg">-</div><div class="sub">次日收盘 vs 选股日收盘</div></div>
+</div>
+
+<!-- 分类统计 -->
+<div class="type-tabs">
+  <div class="type-tab active" data-type="all" onclick="switchType('all')">全部</div>
+  <div class="type-tab" data-type="yaogu" onclick="switchType('yaogu')">🔥 妖股选股</div>
+  <div class="type-tab" data-type="ai_screen" onclick="switchType('ai_screen')">🤖 AI选股</div>
+</div>
+
+<div class="stats-grid" id="typeStats" style="display:none;"></div>
+
+<!-- 待回测 -->
+<div class="section-title">
+  <span>⏳ 待回测记录</span>
+  <button class="btn-run" id="runBtn" onclick="runBacktest()">立即回测</button>
+</div>
+<div id="pendingList"></div>
+
+<!-- 历史回测 -->
+<div class="section-title"><span>📋 历史回测记录</span></div>
+<div id="historyList"></div>
+
+<div class="disclaimer">
+  ⚠️ 回测说明：红盘率 = 选股次日收盘价 > 选股日收盘价的比例；涨停率 = 选股次日涨停的比例；平均收益 = 次日收盘价相对选股日收盘价的平均涨跌幅。回测基于历史数据，不代表未来表现，仅供策略参考，不构成投资建议。
+</div>
+
+<script>
+let currentType = 'all';
+
+function loadStats() {
+  // 总统计
+  fetch('/api/backtest/stats')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('statRecords').textContent = d.record_count || 0;
+      document.getElementById('statStocks').textContent = d.total_stocks || 0;
+      document.getElementById('statRedRate').textContent = (d.red_rate || 0) + '%';
+      document.getElementById('statRedDetail').textContent = (d.red_count || 0) + '/' + (d.total_stocks || 0) + ' 红盘';
+      document.getElementById('statLimitRate').textContent = (d.limit_up_rate || 0) + '%';
+      document.getElementById('statLimitDetail').textContent = (d.limit_up_count || 0) + '/' + (d.total_stocks || 0) + ' 涨停';
+      const avg = d.avg_change || 0;
+      const avgEl = document.getElementById('statAvg');
+      avgEl.textContent = (avg >= 0 ? '+' : '') + avg.toFixed(2) + '%';
+      avgEl.className = 'value ' + (avg >= 0 ? 'red' : 'green');
+    });
+
+  // 分类统计
+  if (currentType !== 'all') {
+    fetch('/api/backtest/stats?type=' + currentType)
+      .then(r => r.json())
+      .then(d => {
+        const box = document.getElementById('typeStats');
+        box.style.display = 'grid';
+        box.innerHTML = `
+          <div class="stat-card"><div class="label">选股次数</div><div class="value blue">${d.record_count || 0}</div></div>
+          <div class="stat-card"><div class="label">股票数</div><div class="value">${d.total_stocks || 0}</div></div>
+          <div class="stat-card"><div class="label">红盘率</div><div class="value red">${d.red_rate || 0}%</div><div class="sub">${d.red_count || 0}/${d.total_stocks || 0}</div></div>
+          <div class="stat-card"><div class="label">涨停率</div><div class="value orange">${d.limit_up_rate || 0}%</div><div class="sub">${d.limit_up_count || 0}/${d.total_stocks || 0}</div></div>
+          <div class="stat-card"><div class="label">平均收益</div><div class="value ${(d.avg_change || 0) >= 0 ? 'red' : 'green'}">${(d.avg_change || 0) >= 0 ? '+' : ''}${(d.avg_change || 0).toFixed(2)}%</div></div>
+        `;
+      });
+  } else {
+    document.getElementById('typeStats').style.display = 'none';
+  }
+}
+
+function loadPending() {
+  fetch('/api/backtest/pending')
+    .then(r => r.json())
+    .then(d => {
+      const list = document.getElementById('pendingList');
+      if (!d.pending || d.pending.length === 0) {
+        list.innerHTML = '<div class="empty-box">暂无待回测记录（选股后次日会自动出现在这里）</div>';
+        document.getElementById('runBtn').disabled = true;
+        return;
+      }
+      document.getElementById('runBtn').disabled = false;
+      let html = '';
+      d.pending.forEach(p => {
+        const typeClass = p.type === 'yaogu' ? 'type-yaogu' : 'type-ai_screen';
+        const typeName = p.type === 'yaogu' ? '妖股选股' : 'AI选股';
+        html += '<div class="pending-item">';
+        html += '<div class="info"><span class="type-badge ' + typeClass + '">' + typeName + '</span>';
+        html += p.screen_date + ' · ' + p.stock_count + ' 只股票</div>';
+        html += '<div style="font-size:12px;color:var(--text-muted)">' + p.stocks.map(s => s.name).join('、') + '</div>';
+        html += '</div>';
+      });
+      list.innerHTML = html;
+    });
+}
+
+function loadHistory() {
+  let url = '/api/backtest/history?limit=30';
+  if (currentType !== 'all') url += '&type=' + currentType;
+  fetch(url)
+    .then(r => r.json())
+    .then(d => {
+      const list = document.getElementById('historyList');
+      if (!d.history || d.history.length === 0) {
+        list.innerHTML = '<div class="empty-box">暂无回测记录（完成至少一次选股并回测后会显示在这里）</div>';
+        return;
+      }
+      let html = '';
+      d.history.forEach(h => {
+        const typeClass = h.type === 'yaogu' ? 'type-yaogu' : 'type-ai_screen';
+        const typeName = h.type === 'yaogu' ? '妖股选股' : 'AI选股';
+        html += '<div class="history-card">';
+        html += '<div class="history-header">';
+        html += '<div class="history-date"><span class="type-badge ' + typeClass + '">' + typeName + '</span>' + h.screen_date + '</div>';
+        html += '<div class="history-meta">';
+        html += '<span>共 ' + h.total + ' 只</span>';
+        html += '<span class="red-rate">红盘率 ' + h.red_rate + '%</span>';
+        html += '<span class="limit-rate">涨停率 ' + h.limit_up_rate + '%</span>';
+        html += '<span class="avg">平均 ' + (h.avg_change >= 0 ? '+' : '') + h.avg_change + '%</span>';
+        html += '</div></div>';
+        html += '<div class="stock-list">';
+        h.stocks.forEach(s => {
+          let tagClass = s.is_red ? 'red' : 'green';
+          if (s.is_limit_up) tagClass = 'limit-up';
+          const changeStr = (s.change_pct >= 0 ? '+' : '') + s.change_pct.toFixed(2) + '%';
+          html += '<div class="stock-tag ' + tagClass + '" onclick="window.location.href=\'/stock/' + s.symbol + '\'">' + s.name + ' ' + changeStr + '</div>';
+        });
+        html += '</div></div>';
+      });
+      list.innerHTML = html;
+    });
+}
+
+function runBacktest() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '回测中...';
+  fetch('/api/backtest/run', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+      btn.textContent = '立即回测';
+      alert('回测完成：已回测 ' + (d.backtested_count || 0) + ' 条记录，' + (d.skipped_count || 0) + ' 条暂无次日数据');
+      loadStats();
+      loadPending();
+      loadHistory();
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.textContent = '立即回测';
+      alert('回测失败：' + err.message);
+    });
+}
+
+function switchType(type) {
+  currentType = type;
+  document.querySelectorAll('.type-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.type === type);
+  });
+  loadStats();
+  loadHistory();
+}
+
+// 初始化
+loadStats();
+loadPending();
+loadHistory();
+</script>
+{% endblock %}

@@ -605,3 +605,254 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* ========== 手机端底部导航栏 ========== */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+  z-index: 200;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  flex: 1;
+  max-width: 80px;
+}
+
+.bottom-nav-item.active {
+  color: var(--accent);
+}
+
+.bottom-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.bottom-nav-label {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* 手机端响应式优化 */
+@media (max-width: 768px) {
+  /* 隐藏桌面端顶部导航 */
+  .desktop-nav {
+    display: none !important;
+  }
+
+  /* 显示底部导航 */
+  .bottom-nav {
+    display: flex;
+  }
+
+  /* 内容区底部留白，给底部导航腾空间 */
+  .container {
+    padding-bottom: 80px !important;
+  }
+
+  /* 顶部导航简化 */
+  .navbar {
+    padding: 8px 12px !important;
+    flex-wrap: nowrap !important;
+    height: auto !important;
+  }
+
+  .navbar-brand span {
+    display: none;
+  }
+
+  .global-search {
+    order: 2 !important;
+    flex: 1 !important;
+    max-width: none !important;
+    margin: 0 0 0 12px !important;
+  }
+
+  /* 统计卡片2列网格 */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .stat-card {
+    padding: 12px 8px !important;
+  }
+
+  .stat-card .value {
+    font-size: 20px !important;
+  }
+
+  .stat-card .label {
+    font-size: 11px !important;
+  }
+
+  /* 卡片增加间距 */
+  .card {
+    margin-bottom: 12px !important;
+    padding: 14px !important;
+  }
+
+  /* 表格优化 */
+  table {
+    font-size: 12px !important;
+  }
+
+  th, td {
+    padding: 10px 8px !important;
+  }
+
+  /* 按钮更大 */
+  .btn {
+    padding: 10px 18px !important;
+    font-size: 14px !important;
+  }
+
+  /* 页面标题 */
+  .page-title {
+    font-size: 20px !important;
+  }
+
+  /* 输入框 */
+  .input, input, select {
+    font-size: 14px !important;
+    padding: 10px 12px !important;
+  }
+
+  /* 图表高度 */
+  .chart-container {
+    height: 260px !important;
+  }
+
+  /* AI悬浮按钮避开底部导航 */
+  #aiFloatBtn {
+    bottom: 76px !important;
+  }
+
+  #aiFloatPanel {
+    bottom: 140px !important;
+  }
+}
+
+/* 超小屏幕 */
+@media (max-width: 380px) {
+  .bottom-nav-label {
+    font-size: 9px;
+  }
+  .bottom-nav-icon {
+    font-size: 18px;
+  }
+  .stat-card .value {
+    font-size: 18px !important;
+  }
+}
+
+/* ========== 自选股卡片 ========== */
+.watchlist-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.watchlist-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.watchlist-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.wc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.wc-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.wc-code {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.wc-price {
+  text-align: right;
+}
+
+.wc-price-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.wc-change {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.wc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.wc-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* 手机端自选股卡片1列 */
+@media (max-width: 768px) {
+  .watchlist-cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .watchlist-card {
+    padding: 12px 14px;
+  }
+  .wc-name {
+    font-size: 15px;
+  }
+  .wc-price-val {
+    font-size: 17px;
+  }
+  .wc-meta {
+    font-size: 11px;
+    gap: 4px 10px;
+  }
+}

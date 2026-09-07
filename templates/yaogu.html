@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% block title %}妖股量化 - 次日涨停概率雷达{% endblock %}
+{% block content %}
+<style>
+  .yaogu-header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .yaogu-header h2 {
+    margin: 0 0 6px 0;
+    font-size: 20px;
+    color: #ff6b6b;
+  }
+  .yaogu-header .subtitle {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .disclaimer {
+    background: rgba(255, 107, 107, 0.1);
+    border-left: 3px solid #ff6b6b;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #ff9999;
+    line-height: 1.6;
+  }
+  .scan-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .scan-controls select {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+  }
+  .btn-scan {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-scan:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+  }
+  .btn-scan:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .scan-status {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .loading-box {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+  }
+  .loading-box .spinner {
+    display: inline-block;
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: #ff6b6b;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .pick-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+    cursor: pointer;
+  }
+  .pick-card:hover {
+    border-color: #ff6b6b;
+  }
+  .pick-rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #ff6b6b;
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    margin-right: 10px;
+  }
+  .pick-rank.r2 { background: #ee5a24; }
+  .pick-rank.r3 { background: #f39c12; }
+  .pick-rank.r-other { background: var(--bg-hover); color: var(--text-muted); }
+  .pick-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .pick-name {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .pick-code {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
+  .pick-price {
+    text-align: right;
+  }
+  .pick-price .price {
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .pick-price .up { color: #ff4757; }
+  .pick-price .down { color: #2ed573; }
+  .prob-bar-wrap {
+    margin: 8px 0;
+  }
+  .prob-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .prob-bar {
+    height: 8px;
+    background: var(--bg-hover);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .prob-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f39c12, #ff6b6b, #ee5a24);
+    border-radius: 4px;
+    transition: width 0.5s;
+  }
+  .pick-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .feature-tag {
+    background: rgba(255, 107, 107, 0.15);
+    color: #ff8888;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .feature-tag.vol { background: rgba(243, 156, 18, 0.15); color: #f5b041; }
+  .feature-tag.tech { background: rgba(52, 152, 219, 0.15); color: #5dade2; }
+  .pick-reason {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+  }
+  .pick-risk {
+    font-size: 12px;
+    color: #e74c3c;
+    margin-top: 6px;
+  }
+  .volatility-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .volatility-high { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+  .volatility-mid { background: rgba(243, 156, 18, 0.2); color: #f39c12; }
+  .volatility-low { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 20px 0 12px 0;
+    padding-left: 10px;
+    border-left: 3px solid #ff6b6b;
+  }
+  .candidate-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .candidate-table th {
+    text-align: left;
+    padding: 8px 10px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+  }
+  .candidate-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .candidate-table tr:hover {
+    background: var(--bg-hover);
+    cursor: pointer;
+  }
+  .score-num {
+    font-weight: 700;
+    color: #ff6b6b;
+  }
+  .error-box {
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    color: #e74c3c;
+    font-size: 14px;
+  }
+</style>
+
+<div class="yaogu-header">
+  <h2>🔥 妖股量化 - 次日涨停概率雷达</h2>
+  <div class="subtitle">基于量能、连板效应、技术形态等多维度特征 + AI 综合分析，预测次日涨停概率</div>
+  <div class="disclaimer">
+    ⚠️ 免责声明：本功能仅供学习研究参考，不构成任何投资建议。股市有风险，投资需谨慎。涨停预测基于历史规律和技术面分析，实际走势受政策、题材、资金情绪等多重因素影响，准确率有限，请勿据此操作。
+  </div>
+</div>
+
+<div class="scan-controls">
+  <select id="poolSelect">
+    <option value="top100">主流100只（各板块龙头）</option>
+    <option value="hot">热门股票池</option>
+  </select>
+  <button class="btn-scan" id="scanBtn" onclick="startScan()">开始扫描</button>
+  <span class="scan-status" id="scanStatus"></span>
+</div>
+
+<div id="resultArea"></div>
+
+<script>
+let scanning = false;
+
+function startScan() {
+  if (scanning) return;
+  scanning = true;
+  const btn = document.getElementById('scanBtn');
+  const status = document.getElementById('scanStatus');
+  const resultArea = document.getElementById('resultArea');
+  const pool = document.getElementById('poolSelect').value;
+
+  btn.disabled = true;
+  btn.textContent = '扫描中...';
+  status.textContent = '正在获取行情和技术指标，请稍候（约1-3分钟）...';
+  resultArea.innerHTML = '<div class="loading-box"><div class="spinner"></div><div>正在扫描股票池，计算妖股特征...</div></div>';
+
+  fetch('/api/yaogu/scan', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pool: pool, top_n: 10})
+  })
+  .then(r => r.json())
+  .then(data => {
+    scanning = false;
+    btn.disabled = false;
+    btn.textContent = '重新扫描';
+    status.textContent = '';
+
+    if (data.error) {
+      resultArea.innerHTML = '<div class="error-box">扫描失败：' + (data.error || '未知错误') + '</div>';
+      return;
+    }
+
+    renderResults(data);
+  })
+  .catch(err => {
+    scanning = false;
+    btn.disabled = false;
+    btn.textContent = '开始扫描';
+    status.textContent = '';
+    resultArea.innerHTML = '<div class="error-box">请求失败：' + err.message + '</div>';
+  });
+}
+
+function renderResults(data) {
+  const picks = data.picks || [];
+  const candidates = data.candidates || [];
+  let html = '';
+
+  html += '<div class="section-title">🎯 AI 涨停概率排名（Top ' + picks.length + '）</div>';
+
+  if (picks.length === 0) {
+    html += '<div class="loading-box">未筛选出符合妖股特征的股票</div>';
+  }
+
+  picks.forEach((p, i) => {
+    const rankClass = i === 0 ? '' : (i === 1 ? 'r2' : (i === 2 ? 'r3' : 'r-other'));
+    const priceClass = p.change_pct >= 0 ? 'up' : 'down';
+    const volClass = p.volatility_expected === '高' ? 'volatility-high' : (p.volatility_expected === '中' ? 'volatility-mid' : 'volatility-low');
+
+    let featuresHtml = '';
+    if (p.features && p.features.length) {
+      p.features.forEach(f => {
+        let tagClass = 'feature-tag';
+        if (f.includes('量') || f.includes('换手')) tagClass += ' vol';
+        if (f.includes('MACD') || f.includes('均线') || f.includes('突破')) tagClass += ' tech';
+        featuresHtml += '<span class="' + tagClass + '">' + f + '</span>';
+      });
+    }
+
+    html += '<div class="pick-card" onclick="window.location.href=\'/stock/' + p.symbol + '\'">';
+    html += '<div class="pick-header">';
+    html += '<div><span class="pick-rank ' + rankClass + '">' + (i + 1) + '</span>';
+    html += '<span class="pick-name">' + p.name + '</span>';
+    html += '<span class="pick-code">' + p.symbol + '</span></div>';
+    html += '<div class="pick-price"><span class="price ' + priceClass + '">' + (p.price || 0).toFixed(2) + '</span>';
+    html += '<div style="font-size:12px;color:' + (p.change_pct >= 0 ? '#ff4757' : '#2ed573') + '">' + (p.change_pct >= 0 ? '+' : '') + (p.change_pct || 0).toFixed(2) + '%</div></div>';
+    html += '</div>';
+
+    html += '<div class="prob-bar-wrap">';
+    html += '<div class="prob-label"><span>次日涨停概率</span><span style="color:#ff6b6b;font-weight:700">' + (p.limit_up_prob || 0) + '%</span></div>';
+    html += '<div class="prob-bar"><div class="prob-fill" style="width:' + (p.limit_up_prob || 0) + '%"></div></div>';
+    html += '</div>';
+
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">';
+    html += '<span class="volatility-badge ' + volClass + '">预期波动：' + (p.volatility_expected || '中') + '</span>';
+    if (p.yaogu_score) html += '<span style="font-size:12px;color:var(--text-muted)">妖股分：' + p.yaogu_score + '/100</span>';
+    if (p.circ_mv > 0) html += '<span style="font-size:12px;color:var(--text-muted)">流通市值：' + p.circ_mv.toFixed(0) + '亿</span>';
+    if (p.avg_amplitude) html += '<span style="font-size:12px;color:var(--text-muted)">20日振幅：' + p.avg_amplitude.toFixed(1) + '%</span>';
+    if (p.consecutive_limit_ups) html += '<span style="font-size:12px;color:#ff6b6b;font-weight:600">' + p.consecutive_limit_ups + '连板</span>';
+    html += '</div>';
+
+    if (featuresHtml) html += '<div class="pick-features">' + featuresHtml + '</div>';
+
+    if (p.reason) html += '<div class="pick-reason">💡 ' + p.reason + '</div>';
+    if (p.risk) html += '<div class="pick-risk">⚠️ 风险：' + p.risk + '</div>';
+
+    html += '</div>';
+  });
+
+  // 候选股列表
+  if (candidates && candidates.length) {
+    html += '<div class="section-title">📋 技术初筛候选（妖股特征分 Top ' + candidates.length + '）</div>';
+    html += '<div style="overflow-x:auto;"><table class="candidate-table">';
+    html += '<thead><tr><th>排名</th><th>名称</th><th>代码</th><th>现价</th><th>涨跌幅</th><th>妖股分</th><th>量比</th><th>换手率</th><th>流通市值</th><th>20日振幅</th><th>连板</th><th>核心特征</th></tr></thead><tbody>';
+    candidates.forEach((c, i) => {
+      const priceClass = c.change_pct >= 0 ? 'color:#ff4757' : 'color:#2ed573';
+      const features = (c.features || []).slice(0, 3).join('、');
+      const circMv = c.circ_mv > 0 ? c.circ_mv.toFixed(0) + '亿' : '-';
+      html += '<tr onclick="window.location.href=\'/stock/' + c.symbol + '\'">';
+      html += '<td>' + (i + 1) + '</td>';
+      html += '<td style="color:var(--text-primary);font-weight:500">' + c.name + '</td>';
+      html += '<td>' + c.symbol + '</td>';
+      html += '<td>' + (c.price || 0).toFixed(2) + '</td>';
+      html += '<td style="' + priceClass + '">' + (c.change_pct >= 0 ? '+' : '') + (c.change_pct || 0).toFixed(2) + '%</td>';
+      html += '<td class="score-num">' + c.yaogu_score + '</td>';
+      html += '<td>' + (c.vol_ratio || 0).toFixed(2) + '</td>';
+      html += '<td>' + (c.turnover || 0).toFixed(1) + '%</td>';
+      html += '<td>' + circMv + '</td>';
+      html += '<td>' + (c.avg_amplitude || 0).toFixed(1) + '%</td>';
+      html += '<td>' + (c.consecutive_limit_ups || 0) + '</td>';
+      html += '<td style="font-size:12px;color:var(--text-muted)">' + features + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  html += '<div style="margin-top:20px;padding:12px;background:var(--bg-secondary);border-radius:8px;font-size:12px;color:var(--text-muted);line-height:1.8">';
+  html += '📊 扫描统计：共扫描 ' + data.total_scanned + ' 只股票，技术初筛 ' + data.total_candidates + ' 只候选，AI 最终选出 ' + picks.length + ' 只。<br>';
+  html += '⏰ 建议每日收盘后（15:00后）扫描，结果更准确。盘中扫描仅供参考。<br>';
+  html += '⚠️ 再次提醒：本功能仅供研究学习，不构成投资建议。股市有风险，投资需谨慎。';
+  html += '</div>';
+
+  document.getElementById('resultArea').innerHTML = html;
+}
+</script>
+{% endblock %}

@@ -24,6 +24,8 @@ from market_data import get_realtime_quotes, get_kline, get_stock_name, validate
 from indicators import analyze_indicators
 from ai_analysis import analyze_stock, general_chat, ai_screen_stocks
 from screener import screen_stocks, HOT_STOCKS, TOP100_STOCKS, screen_etfs, ETF_LIST
+from yaogu import scan_yaogu
+from backtest import init_backtest_db, save_screen_record, run_pending_backtests, get_backtest_stats, get_backtest_history, get_pending_records
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -71,6 +73,11 @@ def init_db():
     conn.close()
 
 
+# 初始化数据库（自选股表 + 回测表）——在函数定义之后调用
+init_db()
+init_backtest_db()
+
+
 # ============ 页面路由 ============
 
 @app.route("/")
@@ -95,6 +102,18 @@ def screener_page():
 def etf_page():
     """ETF板块选股页"""
     return render_template("etf.html")
+
+
+@app.route("/yaogu")
+def yaogu_page():
+    """妖股量化页"""
+    return render_template("yaogu.html")
+
+
+@app.route("/backtest")
+def backtest_page():
+    """回测统计页"""
+    return render_template("backtest.html")
 
 
 # ============ API 路由 ============
@@ -291,6 +310,34 @@ def api_etf_screen():
     return jsonify(result)
 
 
+@app.route("/api/yaogu/scan", methods=["POST"])
+def api_yaogu_scan():
+    """妖股量化扫描 - 次日涨停概率预测"""
+    data = request.get_json() or {}
+    pool = data.get("pool", "top100")
+    top_n = int(data.get("top_n", 10))
+    custom_stocks = data.get("stocks")
+
+    if pool == "top100":
+        stock_list = TOP100_STOCKS
+    elif pool == "hot":
+        stock_list = HOT_STOCKS
+    elif custom_stocks:
+        stock_list = custom_stocks
+    else:
+        stock_list = TOP100_STOCKS
+
+    result = scan_yaogu(stock_list=stock_list, top_n=top_n)
+
+    # 选股成功后自动保存记录（用于次日回测）
+    picks = result.get("picks", [])
+    if picks and "error" not in result:
+        record_stocks = [{"symbol": p["symbol"], "name": p.get("name", "")} for p in picks]
+        save_screen_record("yaogu", record_stocks)
+
+    return jsonify(result)
+
+
 @app.route("/api/ai/screen", methods=["POST"])
 def api_ai_screen():
     """AI 智能选股 - 技术初筛 + AI综合分析"""
@@ -404,12 +451,50 @@ def api_ai_screen():
         p["change_pct"] = q.get("change_pct", 0)
         p["name"] = q.get("name", p.get("name", ""))
 
+    # 选股成功后自动保存记录（用于次日回测）
+    if picks:
+        record_stocks = [{"symbol": p["symbol"], "name": p.get("name", "")} for p in picks]
+        save_screen_record("ai_screen", record_stocks)
+
     return jsonify({
         "total_candidates": len(candidates),
         "total_scanned": len(stocks_data),
         "picks": picks,
         "asset_type": asset_type,
     })
+
+
+# ============ 回测 API ============
+
+@app.route("/api/backtest/run", methods=["POST"])
+def api_backtest_run():
+    """手动触发回测所有待回测记录"""
+    result = run_pending_backtests()
+    return jsonify(result)
+
+
+@app.route("/api/backtest/stats")
+def api_backtest_stats():
+    """获取回测统计（红盘率、涨停率）"""
+    record_type = request.args.get("type")
+    stats = get_backtest_stats(record_type)
+    return jsonify(stats)
+
+
+@app.route("/api/backtest/history")
+def api_backtest_history():
+    """获取回测历史记录"""
+    record_type = request.args.get("type")
+    limit = int(request.args.get("limit", 20))
+    history = get_backtest_history(record_type, limit)
+    return jsonify({"history": history})
+
+
+@app.route("/api/backtest/pending")
+def api_backtest_pending():
+    """获取待回测记录"""
+    pending = get_pending_records()
+    return jsonify({"pending": pending, "count": len(pending)})
 
 
 if __name__ == "__main__":

@@ -145,15 +145,41 @@
       <input type="text" id="globalSearchInput" placeholder="搜索股票名称/代码，如 茅台 或 600519" autocomplete="off">
       <div class="global-search-dropdown" id="globalSearchDropdown"></div>
     </div>
-    <ul class="navbar-nav">
+    <ul class="navbar-nav desktop-nav">
       <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">自选股</a></li>
       <li><a href="/screener" class="{% if '/screener' in request.path %}active{% endif %}">选股参考</a></li>
       <li><a href="/etf" class="{% if '/etf' in request.path %}active{% endif %}">板块ETF</a></li>
+      <li><a href="/yaogu" class="{% if '/yaogu' in request.path %}active{% endif %}">妖股量化</a></li>
+      <li><a href="/backtest" class="{% if '/backtest' in request.path %}active{% endif %}">回测统计</a></li>
     </ul>
   </nav>
   <main class="container">
     {% block content %}{% endblock %}
   </main>
+
+  <!-- 手机端底部导航栏 -->
+  <nav class="bottom-nav">
+    <a href="/" class="bottom-nav-item {% if request.path == '/' %}active{% endif %}">
+      <span class="bottom-nav-icon">🏠</span>
+      <span class="bottom-nav-label">自选</span>
+    </a>
+    <a href="/screener" class="bottom-nav-item {% if '/screener' in request.path %}active{% endif %}">
+      <span class="bottom-nav-icon">📊</span>
+      <span class="bottom-nav-label">选股</span>
+    </a>
+    <a href="/etf" class="bottom-nav-item {% if '/etf' in request.path %}active{% endif %}">
+      <span class="bottom-nav-icon">📈</span>
+      <span class="bottom-nav-label">ETF</span>
+    </a>
+    <a href="/yaogu" class="bottom-nav-item {% if '/yaogu' in request.path %}active{% endif %}">
+      <span class="bottom-nav-icon">🔥</span>
+      <span class="bottom-nav-label">妖股</span>
+    </a>
+    <a href="/backtest" class="bottom-nav-item {% if '/backtest' in request.path %}active{% endif %}">
+      <span class="bottom-nav-icon">📋</span>
+      <span class="bottom-nav-label">回测</span>
+    </a>
+  </nav>
 
   <script>
     // 全局搜索功能

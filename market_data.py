@@ -87,6 +87,9 @@ def get_realtime_quotes(symbols):
                         "change_pct": float(fields[32]) if fields[32] else 0,
                         "amount": float(fields[37]) if fields[37] else 0,  # 万元
                         "turnover": float(fields[38]) if len(fields) > 38 and fields[38] else 0,  # 换手率%
+                        "amplitude": float(fields[43]) if len(fields) > 43 and fields[43] else 0,  # 振幅%
+                        "circ_mv": float(fields[44]) if len(fields) > 44 and fields[44] else 0,  # 流通市值（亿）
+                        "total_mv": float(fields[45]) if len(fields) > 45 and fields[45] else 0,  # 总市值（亿）
                     }
                     _quote_cache[symbol] = quote
                     _quote_cache_time[symbol] = now

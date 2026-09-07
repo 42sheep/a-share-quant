@@ -345,7 +345,7 @@ JSON格式示例：
         return {"error": f"解析失败: {str(e)}", "raw": result}
 
 
-def scan_yaogu(stock_list=None, top_n=10, max_workers=4):
+def scan_yaogu(stock_list=None, top_n=10, max_workers=8):
     """
     妖股量化扫描主函数（优化版）
     stock_list: 股票池，默认用 top100

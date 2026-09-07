@@ -418,7 +418,7 @@ def api_ai_screen():
             return None
 
     stocks_data = []
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {executor.submit(get_stock_data, s): s for s in stock_list}
         for future in as_completed(futures):
             result = future.result()

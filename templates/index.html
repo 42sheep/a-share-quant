@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}自选股 - A股量化分析系统{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">自选股监控</h1>
+  <p class="page-subtitle">实时行情 · 技术信号 · 一键分析</p>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">我的自选</span>
+    <div style="display: flex; gap: 8px; align-items: flex-start;">
+      <div style="position:relative; width:320px;">
+        <input type="text" id="addSymbol" class="input" placeholder="输入股票名称/代码，如 茅台 或 600519" style="width:100%;" autocomplete="off">
+        <div id="searchDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; margin-top:4px; max-height:280px; overflow-y:auto; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
+      </div>
+      <button class="btn btn-primary" onclick="addStock()">添加</button>
+      <button class="btn" onclick="loadWatchlist()">刷新</button>
+    </div>
+  </div>
+  <div id="watchlistContent">
+    <div class="empty-state">
+      <div class="empty-state-icon">📊</div>
+      <p>加载中...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function fmtNum(n, decimals=2) {
+  if (n === null || n === undefined || isNaN(n)) return '-';
+  return Number(n).toFixed(decimals);
+}
+
+function fmtVolume(v) {
+  if (!v) return '-';
+  if (v >= 10000) return (v/10000).toFixed(2) + '万手';
+  return v.toFixed(0) + '手';
+}
+
+function fmtAmount(a) {
+  if (!a) return '-';
+  if (a >= 10000) return (a/10000).toFixed(2) + '亿';
+  return a.toFixed(0) + '万';
+}
+
+function changeClass(pct) {
+  if (pct > 0) return 'up';
+  if (pct < 0) return 'down';
+  return 'flat';
+}
+
+async function loadWatchlist() {
+  try {
+    const resp = await fetch('/api/watchlist');
+    const data = await resp.json();
+    const stocks = data.stocks || [];
+
+    if (stocks.length === 0) {
+      document.getElementById('watchlistContent').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📈</div>
+          <p>还没有自选股，在上方输入代码添加</p>
+          <p style="font-size:12px;margin-top:8px;color:var(--text-muted)">示例：sh600519（贵州茅台）、sz000001（平安银行）</p>
+        </div>`;
+      return;
+    }
+
+    let html = `<table class="table">
+      <thead><tr>
+        <th>股票</th>
+        <th>最新价</th>
+        <th>涨跌幅</th>
+        <th>涨跌额</th>
+        <th>今开</th>
+        <th>最高</th>
+        <th>最低</th>
+        <th>成交量</th>
+        <th>成交额</th>
+        <th>换手率</th>
+        <th>操作</th>
+      </tr></thead><tbody>`;
+
+    for (const s of stocks) {
+      const cls = changeClass(s.change_pct);
+      const sign = s.change_pct > 0 ? '+' : '';
+      html += `<tr>
+        <td>
+          <div style="font-weight:600;cursor:pointer;color:var(--accent)" onclick="location.href='/stock/${s.symbol}'">${s.name}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${s.symbol.toUpperCase()}</div>
+        </td>
+        <td style="font-weight:600;font-size:16px">${fmtNum(s.price)}</td>
+        <td class="${cls}" style="font-weight:600">${sign}${fmtNum(s.change_pct)}%</td>
+        <td class="${cls}">${sign}${fmtNum(s.change)}</td>
+        <td>${fmtNum(s.open)}</td>
+        <td>${fmtNum(s.high)}</td>
+        <td>${fmtNum(s.low)}</td>
+        <td>${fmtVolume(s.volume)}</td>
+        <td>${fmtAmount(s.amount)}</td>
+        <td>${fmtNum(s.turnover)}%</td>
+        <td>
+          <button class="btn btn-sm btn-primary" onclick="location.href='/stock/${s.symbol}'">分析</button>
+          <button class="btn btn-sm btn-danger" onclick="removeStock('${s.symbol}')">删除</button>
+        </td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('watchlistContent').innerHTML = '<div class="table-wrapper">' + html + '</div>';
+  } catch (e) {
+    document.getElementById('watchlistContent').innerHTML = `<div class="empty-state"><p>加载失败：${e.message}</p></div>`;
+  }
+}
+
+// ========== 联想搜索 ==========
+let searchTimer = null;
+let searchResults = [];
+let selectedIndex = -1;
+
+async function doSearch(keyword) {
+  if (!keyword || keyword.length < 1) {
+    hideDropdown();
+    return;
+  }
+  try {
+    const resp = await fetch('/api/search?q=' + encodeURIComponent(keyword) + '&limit=10');
+    const data = await resp.json();
+    searchResults = data.results || [];
+    selectedIndex = -1;
+    renderDropdown();
+  } catch (e) {
+    hideDropdown();
+  }
+}
+
+function renderDropdown() {
+  const dropdown = document.getElementById('searchDropdown');
+  if (searchResults.length === 0) {
+    hideDropdown();
+    return;
+  }
+  let html = '';
+  searchResults.forEach((s, i) => {
+    const selected = i === selectedIndex ? 'background:var(--bg-hover);' : '';
+    html += `<div class="search-item" data-index="${i}" style="padding:10px 14px; cursor:pointer; ${selected} border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;" onmousedown="event.preventDefault(); viewStock(${i})" onmouseenter="selectedIndex=${i}; this.style.background='var(--bg-hover)'" onmouseleave="this.style.background=''">
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:600; color:var(--text-primary);">${s.name}</span>
+          <span style="font-size:12px; color:var(--text-muted);">${s.symbol.toUpperCase()}</span>
+        </div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${s.pinyin ? s.pinyin.toUpperCase() + ' · ' : ''}${s.market === 'sh' ? '沪市' : '深市'}</div>
+      </div>
+      <button class="btn btn-sm btn-primary" style="margin-left:10px; padding:4px 10px; font-size:14px;" onmousedown="event.preventDefault(); event.stopPropagation(); addFromSearch(${i})" title="添加到自选股">+</button>
+    </div>`;
+  });
+  dropdown.innerHTML = html;
+  dropdown.style.display = 'block';
+}
+
+function hideDropdown() {
+  document.getElementById('searchDropdown').style.display = 'none';
+  searchResults = [];
+  selectedIndex = -1;
+}
+
+function viewStock(index) {
+  const s = searchResults[index];
+  if (!s) return;
+  hideDropdown();
+  location.href = '/stock/' + s.symbol;
+}
+
+function addFromSearch(index) {
+  const s = searchResults[index];
+  if (!s) return;
+  document.getElementById('addSymbol').value = s.symbol;
+  hideDropdown();
+  addStock();
+}
+
+// 输入框事件
+const searchInput = document.getElementById('addSymbol');
+searchInput.addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  const val = this.value.trim();
+  // 如果是纯代码格式，不搜索直接添加
+  if (/^(sh|sz)?\d{6}$/i.test(val)) {
+    hideDropdown();
+    return;
+  }
+  searchTimer = setTimeout(() => doSearch(val), 200);
+});
+
+searchInput.addEventListener('keydown', function(e) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (searchResults.length > 0) {
+      selectedIndex = (selectedIndex + 1) % searchResults.length;
+      renderDropdown();
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (searchResults.length > 0) {
+      selectedIndex = selectedIndex <= 0 ? searchResults.length - 1 : selectedIndex - 1;
+      renderDropdown();
+    }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (selectedIndex >= 0 && searchResults[selectedIndex]) {
+      viewStock(selectedIndex);
+    } else {
+      addStock();
+    }
+  } else if (e.key === 'Escape') {
+    hideDropdown();
+  }
+});
+
+// 点击外部关闭下拉框
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#addSymbol') && !e.target.closest('#searchDropdown')) {
+    hideDropdown();
+  }
+});
+
+async function addStock() {
+  const input = document.getElementById('addSymbol');
+  const symbol = input.value.trim();
+  if (!symbol) return;
+
+  try {
+    const resp = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({symbol})
+    });
+    const data = await resp.json();
+    if (data.error) {
+      alert(data.error);
+    } else {
+      input.value = '';
+      hideDropdown();
+      loadWatchlist();
+    }
+  } catch (e) {
+    alert('添加失败：' + e.message);
+  }
+}
+
+async function removeStock(symbol) {
+  if (!confirm('确定删除这只股票？')) return;
+  try {
+    await fetch('/api/watchlist/' + symbol, {method: 'DELETE'});
+    loadWatchlist();
+  } catch (e) {
+    alert('删除失败：' + e.message);
+  }
+}
+
+// 初始加载 + 每30秒自动刷新
+loadWatchlist();
+setInterval(loadWatchlist, 30000);
+</script>
+{% endblock %}

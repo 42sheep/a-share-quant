@@ -1,0 +1,530 @@
+{% extends "base.html" %}
+{% block title %}选股参考 - A股量化分析系统{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">选股参考</h1>
+  <p class="page-subtitle">多维度技术条件筛选 · 趋势+MACD+KDJ+RSI+成交量+数值过滤</p>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">筛选条件</span>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-sm" onclick="loadPreset('balanced')">均衡策略</button>
+      <button class="btn btn-sm" onclick="loadPreset('strong')">强势策略</button>
+      <button class="btn btn-sm" onclick="loadPreset('reversal')">反弹策略</button>
+      <button class="btn btn-primary" id="runBtn" onclick="runScreener()">开始选股</button>
+      <button class="btn" id="aiRunBtn" onclick="runAIScreen()" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;">🤖 AI智能选股</button>
+    </div>
+  </div>
+
+  <!-- 趋势确认 -->
+  <div style="margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px;">📈 趋势确认</div>
+    <div class="condition-group">
+      <div class="condition-item"><input type="checkbox" id="c_above_ma20" checked><label for="c_above_ma20">站上20日线</label></div>
+      <div class="condition-item"><input type="checkbox" id="c_above_ma60"><label for="c_above_ma60">站上60日线（中期趋势）</label></div>
+      <div class="condition-item"><input type="checkbox" id="c_ma_bullish"><label for="c_ma_bullish">均线多头排列（MA5>10>20）</label></div>
+      <div class="condition-item"><input type="checkbox" id="c_boll_above_mid"><label for="c_boll_above_mid">布林带站上中轨</label></div>
+    </div>
+  </div>
+
+  <!-- MACD 信号 -->
+  <div style="margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;color:var(--orange);margin-bottom:8px;">📊 MACD 信号</div>
+    <div class="condition-group">
+      <div class="condition-item"><input type="checkbox" id="c_macd_gold" checked><label for="c_macd_gold">MACD金叉/柱转正（或多头状态）</label></div>
+      <div class="condition-item"><input type="checkbox" id="c_macd_above_zero"><label for="c_macd_above_zero">MACD零轴上方（DIF>0，中期多头）</label></div>
+    </div>
+  </div>
+
+  <!-- KDJ 信号 -->
+  <div style="margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;color:var(--purple);margin-bottom:8px;">🎯 KDJ 信号</div>
+    <div class="condition-group">
+      <div class="condition-item"><input type="checkbox" id="c_kdj_gold"><label for="c_kdj_gold">KDJ金叉</label></div>
+      <div class="condition-item">
+        <label>KDJ-K值范围：</label>
+        <input type="number" id="c_kdj_min" value="20" class="input" style="width:60px"> ~
+        <input type="number" id="c_kdj_max" value="80" class="input" style="width:60px">
+      </div>
+    </div>
+  </div>
+
+  <!-- RSI + 成交量 -->
+  <div style="margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:8px;">📉 RSI & 成交量</div>
+    <div class="condition-group">
+      <div class="condition-item">
+        <label>RSI6范围：</label>
+        <input type="number" id="c_rsi_min" value="30" class="input" style="width:60px"> ~
+        <input type="number" id="c_rsi_max" value="70" class="input" style="width:60px">
+      </div>
+      <div class="condition-item"><input type="checkbox" id="c_volume_surge" checked><label for="c_volume_surge">成交量放大</label></div>
+      <div class="condition-item">
+        <label>量比阈值(5日/20日)：</label>
+        <input type="number" id="c_vol_ratio" value="1.2" step="0.1" class="input" style="width:60px">
+      </div>
+    </div>
+  </div>
+
+  <!-- 数值过滤 -->
+  <div style="margin-bottom:8px;">
+    <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">🔢 数值过滤（留空则不限制）</div>
+    <div class="condition-group">
+      <div class="condition-item">
+        <label>最低综合评分：</label>
+        <input type="number" id="c_min_score" value="10" class="input" style="width:70px">
+      </div>
+      <div class="condition-item">
+        <label>换手率(%)：</label>
+        <input type="number" id="c_turnover_min" placeholder="最低" class="input" style="width:60px"> ~
+        <input type="number" id="c_turnover_max" placeholder="最高" class="input" style="width:60px">
+      </div>
+      <div class="condition-item">
+        <label>涨跌幅(%)：</label>
+        <input type="number" id="c_chg_min" placeholder="最低" class="input" style="width:60px"> ~
+        <input type="number" id="c_chg_max" placeholder="最高" class="input" style="width:60px">
+      </div>
+      <div class="condition-item">
+        <label>股价(元)：</label>
+        <input type="number" id="c_price_min" placeholder="最低" class="input" style="width:60px"> ~
+        <input type="number" id="c_price_max" placeholder="最高" class="input" style="width:60px">
+      </div>
+      <div class="condition-item">
+        <label>股票池：</label>
+        <select id="c_pool" class="input" onchange="toggleCustomPool()">
+          <option value="top100">主流100只（市值前100大盘蓝筹）</option>
+          <option value="hot">热门股票池（约60只行业龙头）</option>
+          <option value="watchlist">我的自选股</option>
+          <option value="custom">自定义股票池</option>
+        </select>
+      </div>
+    </div>
+    <!-- 自定义股票池 -->
+    <div id="customPoolSection" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+      <div style="display:flex; gap:8px; align-items:flex-start; margin-bottom:10px;">
+        <div style="position:relative; width:280px;">
+          <input type="text" id="customSearchInput" class="input" placeholder="搜索股票名称/代码添加，如 茅台" style="width:100%;" autocomplete="off">
+          <div id="customSearchDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; margin-top:4px; max-height:240px; overflow-y:auto; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
+        </div>
+        <span style="font-size:12px; color:var(--text-muted); line-height:2.5;">已选 <span id="customCount">0</span> 只</span>
+      </div>
+      <div id="customTags" style="display:flex; flex-wrap:wrap; gap:6px; min-height:28px;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="resultCard" class="card" style="display:none">
+  <div class="card-header">
+    <span class="card-title">筛选结果</span>
+    <span id="resultStats" class="tag tag-blue">-</span>
+  </div>
+  <div id="resultContent" style="overflow-x:auto"></div>
+</div>
+
+<!-- AI 智能选股结果 -->
+<div id="aiResultCard" class="card" style="display:none">
+  <div class="card-header">
+    <span class="card-title">🤖 AI 智能选股</span>
+    <span id="aiResultStats" class="tag" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;">-</span>
+  </div>
+  <div id="aiResultContent"></div>
+</div>
+
+<!-- AI 选股 loading -->
+<div id="aiLoadingCard" class="card" style="display:none">
+  <div class="ai-loading" style="padding:40px">
+    <div class="spinner"></div>
+    <span>AI 正在扫描股票池并分析... 通常需要 30-60 秒</span>
+  </div>
+</div>
+
+<div id="loadingCard" class="card" style="display:none">
+  <div class="ai-loading" style="padding:40px">
+    <div class="spinner"></div>
+    <span>正在扫描股票池，计算技术指标... 通常需要 10-40 秒</span>
+  </div>
+</div>
+
+<script>
+function fmt(n, d=2) {
+  if (n === null || n === undefined || isNaN(n)) return '-';
+  return Number(n).toFixed(d);
+}
+
+// ========== 自定义股票池 ==========
+let customStocks = [];
+let customSearchTimer = null;
+let customSearchResults = [];
+let customSelectedIndex = -1;
+
+function toggleCustomPool() {
+  const pool = document.getElementById('c_pool').value;
+  document.getElementById('customPoolSection').style.display = pool === 'custom' ? 'block' : 'none';
+}
+
+function renderCustomTags() {
+  const container = document.getElementById('customTags');
+  document.getElementById('customCount').textContent = customStocks.length;
+  if (customStocks.length === 0) {
+    container.innerHTML = '<span style="font-size:12px; color:var(--text-muted);">搜索上方输入框添加股票</span>';
+    return;
+  }
+  container.innerHTML = customStocks.map(s =>
+    `<span class="tag tag-blue" style="padding:4px 10px; display:inline-flex; align-items:center; gap:6px;">
+      ${s.name} <span style="opacity:0.6; font-size:11px;">${s.symbol.toUpperCase()}</span>
+      <span onclick="removeCustomStock('${s.symbol}')" style="cursor:pointer; margin-left:2px; font-weight:bold;">&times;</span>
+    </span>`
+  ).join('');
+}
+
+function addCustomStock(stock) {
+  if (!customStocks.find(s => s.symbol === stock.symbol)) {
+    customStocks.push(stock);
+    renderCustomTags();
+  }
+}
+
+function removeCustomStock(symbol) {
+  customStocks = customStocks.filter(s => s.symbol !== symbol);
+  renderCustomTags();
+}
+
+async function doCustomSearch(keyword) {
+  if (!keyword || keyword.length < 1) {
+    hideCustomDropdown();
+    return;
+  }
+  try {
+    const resp = await fetch('/api/search?q=' + encodeURIComponent(keyword) + '&limit=10');
+    const data = await resp.json();
+    customSearchResults = data.results || [];
+    customSelectedIndex = -1;
+    renderCustomDropdown();
+  } catch (e) {
+    hideCustomDropdown();
+  }
+}
+
+function renderCustomDropdown() {
+  const dropdown = document.getElementById('customSearchDropdown');
+  if (customSearchResults.length === 0) {
+    hideCustomDropdown();
+    return;
+  }
+  let html = '';
+  customSearchResults.forEach((s, i) => {
+    const selected = i === customSelectedIndex ? 'background:var(--bg-hover);' : '';
+    html += `<div class="custom-search-item" data-index="${i}" style="padding:10px 14px; cursor:pointer; ${selected} border-bottom:1px solid var(--border);" onmousedown="event.preventDefault(); selectCustomSearchResult(${i})" onmouseenter="customSelectedIndex=${i}; this.style.background='var(--bg-hover)'" onmouseleave="this.style.background=''">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-weight:600;">${s.name}</span>
+        <span style="font-size:12px; color:var(--text-muted);">${s.symbol.toUpperCase()}</span>
+      </div>
+    </div>`;
+  });
+  dropdown.innerHTML = html;
+  dropdown.style.display = 'block';
+}
+
+function hideCustomDropdown() {
+  document.getElementById('customSearchDropdown').style.display = 'none';
+  customSearchResults = [];
+  customSelectedIndex = -1;
+}
+
+function selectCustomSearchResult(index) {
+  const s = customSearchResults[index];
+  if (!s) return;
+  addCustomStock(s);
+  document.getElementById('customSearchInput').value = '';
+  hideCustomDropdown();
+}
+
+// 自定义搜索输入框事件
+const customInput = document.getElementById('customSearchInput');
+if (customInput) {
+  customInput.addEventListener('input', function() {
+    clearTimeout(customSearchTimer);
+    const val = this.value.trim();
+    customSearchTimer = setTimeout(() => doCustomSearch(val), 200);
+  });
+  customInput.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (customSearchResults.length > 0) {
+        customSelectedIndex = (customSelectedIndex + 1) % customSearchResults.length;
+        renderCustomDropdown();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (customSearchResults.length > 0) {
+        customSelectedIndex = customSelectedIndex <= 0 ? customSearchResults.length - 1 : customSelectedIndex - 1;
+        renderCustomDropdown();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (customSelectedIndex >= 0 && customSearchResults[customSelectedIndex]) {
+        selectCustomSearchResult(customSelectedIndex);
+      }
+    } else if (e.key === 'Escape') {
+      hideCustomDropdown();
+    }
+  });
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#customSearchInput') && !e.target.closest('#customSearchDropdown')) {
+      hideCustomDropdown();
+    }
+  });
+}
+renderCustomTags();
+
+function loadPreset(type) {
+  // 重置所有
+  document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+  document.getElementById('c_rsi_min').value = 30;
+  document.getElementById('c_rsi_max').value = 70;
+  document.getElementById('c_kdj_min').value = 20;
+  document.getElementById('c_kdj_max').value = 80;
+  document.getElementById('c_vol_ratio').value = 1.2;
+  document.getElementById('c_min_score').value = 10;
+
+  if (type === 'balanced') {
+    // 均衡：站上20日线 + MACD多头 + 放量 + RSI健康
+    document.getElementById('c_above_ma20').checked = true;
+    document.getElementById('c_macd_gold').checked = true;
+    document.getElementById('c_volume_surge').checked = true;
+    document.getElementById('c_min_score').value = 10;
+  } else if (type === 'strong') {
+    // 强势：多头排列 + 站上60日 + MACD零上 + 放量 + 高评分
+    document.getElementById('c_above_ma20').checked = true;
+    document.getElementById('c_above_ma60').checked = true;
+    document.getElementById('c_ma_bullish').checked = true;
+    document.getElementById('c_macd_gold').checked = true;
+    document.getElementById('c_macd_above_zero').checked = true;
+    document.getElementById('c_volume_surge').checked = true;
+    document.getElementById('c_vol_ratio').value = 1.5;
+    document.getElementById('c_min_score').value = 30;
+  } else if (type === 'reversal') {
+    // 反弹：KDJ超卖金叉 + RSI低位 + MACD柱转正 + 站上20日
+    document.getElementById('c_above_ma20').checked = true;
+    document.getElementById('c_macd_gold').checked = true;
+    document.getElementById('c_kdj_gold').checked = true;
+    document.getElementById('c_kdj_min').value = 0;
+    document.getElementById('c_kdj_max').value = 50;
+    document.getElementById('c_rsi_min').value = 20;
+    document.getElementById('c_rsi_max').value = 55;
+    document.getElementById('c_min_score').value = 0;
+  }
+}
+
+async function runScreener() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '选股中...';
+
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('loadingCard').style.display = 'block';
+
+  // 收集数值范围
+  function getRange(minId, maxId) {
+    const mn = document.getElementById(minId).value;
+    const mx = document.getElementById(maxId).value;
+    if (mn === '' && mx === '') return null;
+    return [mn === '' ? -9999 : parseFloat(mn), mx === '' ? 9999 : parseFloat(mx)];
+  }
+
+  const conditions = {
+    above_ma20: document.getElementById('c_above_ma20').checked,
+    above_ma60: document.getElementById('c_above_ma60').checked,
+    ma_bullish: document.getElementById('c_ma_bullish').checked,
+    boll_above_mid: document.getElementById('c_boll_above_mid').checked,
+    macd_gold_cross: document.getElementById('c_macd_gold').checked,
+    macd_above_zero: document.getElementById('c_macd_above_zero').checked,
+    kdj_gold_cross: document.getElementById('c_kdj_gold').checked,
+    kdj_range: [parseFloat(document.getElementById('c_kdj_min').value), parseFloat(document.getElementById('c_kdj_max').value)],
+    rsi_range: [parseFloat(document.getElementById('c_rsi_min').value), parseFloat(document.getElementById('c_rsi_max').value)],
+    volume_surge: document.getElementById('c_volume_surge').checked,
+    vol_ratio_min: parseFloat(document.getElementById('c_vol_ratio').value) || 1.2,
+    min_score: parseInt(document.getElementById('c_min_score').value) || 0,
+    turnover_range: getRange('c_turnover_min', 'c_turnover_max'),
+    change_pct_range: getRange('c_chg_min', 'c_chg_max'),
+    price_range: getRange('c_price_min', 'c_price_max'),
+  };
+
+  const pool = document.getElementById('c_pool').value;
+  let stocks = null;
+  if (pool === 'watchlist') {
+    try {
+      const resp = await fetch('/api/watchlist');
+      const data = await resp.json();
+      stocks = (data.stocks || []).map(s => s.symbol);
+    } catch (e) {
+      alert('获取自选股失败：' + e.message);
+      btn.disabled = false; btn.textContent = '开始选股';
+      document.getElementById('loadingCard').style.display = 'none';
+      return;
+    }
+  } else if (pool === 'custom') {
+    if (customStocks.length === 0) {
+      alert('请先在自定义股票池中添加至少一只股票');
+      btn.disabled = false; btn.textContent = '开始选股';
+      return;
+    }
+    stocks = customStocks.map(s => s.symbol);
+  }
+
+  try {
+    const resp = await fetch('/api/screener/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conditions, stocks, pool })
+    });
+    const data = await resp.json();
+
+    document.getElementById('loadingCard').style.display = 'none';
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('resultStats').textContent = `扫描 ${data.total} 只，命中 ${data.matched} 只，耗时 ${data.elapsed}s`;
+
+    const resultStocks = data.stocks || [];
+    if (resultStocks.length === 0) {
+      document.getElementById('resultContent').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🔍</div>
+          <p>没有符合条件的股票</p>
+          <p style="font-size:12px;margin-top:8px;color:var(--text-muted)">可以尝试放宽条件（取消部分筛选或降低最低评分），或使用"均衡策略"预设</p>
+        </div>`;
+      return;
+    }
+
+    let html = `<table class="table">
+      <thead><tr>
+        <th>股票</th><th>最新价</th><th>涨跌幅</th><th>换手率</th>
+        <th>综合评分</th><th>趋势</th><th>量比</th><th>MACD(DIF)</th>
+        <th>KDJ-K</th><th>RSI6</th><th>技术信号</th><th>操作</th>
+      </tr></thead><tbody>`;
+
+    for (const s of resultStocks) {
+      const cls = s.change_pct > 0 ? 'up' : s.change_pct < 0 ? 'down' : 'flat';
+      const sign = s.change_pct > 0 ? '+' : '';
+      const scoreColor = s.score > 40 ? 'tag-red' : s.score > 20 ? 'tag-orange' : 'tag-blue';
+      const sigHtml = (s.signals || []).slice(0, 3).map(sig => {
+        return `<span class="tag tag-gray" style="margin:2px" title="${sig.desc}">${sig.name}</span>`;
+      }).join('');
+
+      html += `<tr>
+        <td>
+          <div style="font-weight:600;cursor:pointer;color:var(--accent)" onclick="location.href='/stock/${s.symbol}'">${s.name}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${s.symbol.toUpperCase()}</div>
+        </td>
+        <td style="font-weight:600">${fmt(s.price)}</td>
+        <td class="${cls}" style="font-weight:600">${sign}${fmt(s.change_pct)}%</td>
+        <td>${fmt(s.turnover)}%</td>
+        <td><span class="tag ${scoreColor}">${s.score}</span></td>
+        <td>${s.trend}</td>
+        <td>${fmt(s.vol_ratio)}</td>
+        <td style="font-size:12px">${fmt(s.dif, 4)}</td>
+        <td>${fmt(s.kdj_k, 1)}</td>
+        <td>${fmt(s.rsi6, 1)}</td>
+        <td><div style="max-width:220px">${sigHtml || '-'}</div></td>
+        <td><button class="btn btn-sm btn-primary" onclick="location.href='/stock/${s.symbol}'">详情</button></td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('resultContent').innerHTML = '<div class="table-wrapper">' + html + '</div>';
+
+  } catch (e) {
+    document.getElementById('loadingCard').style.display = 'none';
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('resultContent').innerHTML = `<div class="empty-state"><p>选股失败：${e.message}</p></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '开始选股';
+  }
+}
+
+// ========== AI 智能选股 ==========
+async function runAIScreen() {
+  const pool = document.getElementById('c_pool').value;
+  const btn = document.getElementById('aiRunBtn');
+
+  // 隐藏其他结果
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('aiResultCard').style.display = 'none';
+  document.getElementById('aiLoadingCard').style.display = 'block';
+  btn.disabled = true;
+  btn.textContent = 'AI分析中...';
+
+  try {
+    const resp = await fetch('/api/ai/screen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pool: pool, top_n: 5 })
+    });
+    const data = await resp.json();
+
+    document.getElementById('aiLoadingCard').style.display = 'none';
+
+    if (data.error) {
+      document.getElementById('aiResultCard').style.display = 'block';
+      document.getElementById('aiResultContent').innerHTML = `<div class="empty-state"><p style="color:var(--red)">AI选股失败：${data.error}</p></div>`;
+      return;
+    }
+
+    const picks = data.picks || [];
+    document.getElementById('aiResultStats').textContent = `扫描${data.total_scanned}只，AI精选${picks.length}只`;
+
+    if (picks.length === 0) {
+      document.getElementById('aiResultContent').innerHTML = `<div class="empty-state"><p>AI 未选出符合条件的标的，建议调整股票池或稍后再试</p></div>`;
+      document.getElementById('aiResultCard').style.display = 'block';
+      return;
+    }
+
+    // 渲染AI选股结果
+    let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+    picks.forEach((p, i) => {
+      const changeColor = p.change_pct >= 0 ? 'var(--red)' : 'var(--green)';
+      const confColor = p.confidence >= 80 ? '#10b981' : p.confidence >= 60 ? '#f59e0b' : '#6b7280';
+      html += `
+        <div style="background:var(--bg-hover);border-radius:12px;padding:16px;border-left:4px solid ${confColor};cursor:pointer;" onclick="location.href='/stock/${p.symbol}'">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+            <div>
+              <div style="font-size:16px;font-weight:600;color:var(--text-primary);">
+                <span style="color:var(--text-muted);font-size:13px;margin-right:8px;">#${i+1}</span>${p.name}
+                <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">${p.symbol.toUpperCase()}</span>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:18px;font-weight:600;color:var(--text-primary);">${fmt(p.price)}</div>
+              <div style="font-size:13px;color:${changeColor};">${p.change_pct >= 0 ? '+' : ''}${fmt(p.change_pct)}%</div>
+            </div>
+          </div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;">
+            💡 ${p.reason}
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;">
+            <span style="color:var(--text-muted);">🎯 目标价: <span style="color:var(--red);font-weight:600;">${fmt(p.target_price)}</span></span>
+            <span style="color:var(--text-muted);">🛑 止损价: <span style="color:var(--green);font-weight:600;">${fmt(p.stop_loss)}</span></span>
+            <span style="color:var(--text-muted);">📊 看涨信心: <span style="color:${confColor};font-weight:600;">${p.confidence}%</span></span>
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+    html += `<div style="margin-top:12px;padding:10px;background:var(--bg-secondary);border-radius:8px;font-size:11px;color:var(--text-muted);text-align:center;">
+      ⚠️ AI选股仅供参考，不构成投资建议。股市有风险，投资需谨慎。
+    </div>`;
+
+    document.getElementById('aiResultContent').innerHTML = html;
+    document.getElementById('aiResultCard').style.display = 'block';
+
+  } catch (e) {
+    document.getElementById('aiLoadingCard').style.display = 'none';
+    document.getElementById('aiResultCard').style.display = 'block';
+    document.getElementById('aiResultContent').innerHTML = `<div class="empty-state"><p style="color:var(--red)">AI选股失败：${e.message}</p></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 AI智能选股';
+  }
+}
+</script>
+{% endblock %}

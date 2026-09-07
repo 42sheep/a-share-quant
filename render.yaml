@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: a-share-quant
+    runtime: python
+    repo: https://github.com/your-username/a-share-quant.git  # 替换成你的GitHub仓库地址
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    instanceCount: 1
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.7
+      - key: PORT
+        value: 5050
+    autoDeploy: yes

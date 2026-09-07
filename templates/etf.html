@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block title %}板块ETF - A股量化分析系统{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>板块ETF选股</h1>
+  <p class="page-subtitle">扫描主流ETF，按近期表现和技术面综合评分排序，找出强势板块</p>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">ETF板块扫描</span>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span id="etfStats" style="font-size:13px; color:var(--text-muted);"></span>
+      <button id="scanBtn" class="btn btn-primary" onclick="runEtfScreen()">开始扫描</button>
+      <button id="aiScanBtn" class="btn" onclick="runAIEtfScreen()" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;">🤖 AI选ETF</button>
+    </div>
+  </div>
+
+  <div id="loadingCard" style="display:none; padding:40px; text-align:center;">
+    <div class="spinner"></div>
+    <p style="margin-top:16px; color:var(--text-muted);">正在扫描ETF板块，约10-20秒...</p>
+  </div>
+
+  <div id="resultCard" style="display:none;">
+    <div id="resultContent"></div>
+  </div>
+
+  <!-- AI 选ETF结果 -->
+  <div id="aiResultCard" style="display:none;">
+    <div style="padding:16px 0 0 0;">
+      <div style="font-size:16px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        🤖 AI 精选ETF
+        <span id="aiResultStats" class="tag" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;font-size:11px;">-</span>
+      </div>
+      <div id="aiResultContent"></div>
+    </div>
+  </div>
+
+  <!-- AI loading -->
+  <div id="aiLoadingCard" style="display:none; padding:40px; text-align:center;">
+    <div class="spinner"></div>
+    <p style="margin-top:16px; color:var(--text-muted);">AI 正在扫描ETF并分析... 约30-60秒</p>
+  </div>
+
+  <div id="emptyCard">
+    <div class="empty-state">
+      <div class="empty-state-icon">📊</div>
+      <p>点击"开始扫描"，分析主流ETF板块的近期表现</p>
+      <p style="font-size:12px; margin-top:8px; color:var(--text-muted);">覆盖宽基、科技、新能源、医药、消费、金融、军工等50+只主流ETF</p>
+    </div>
+  </div>
+</div>
+
+<style>
+.spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.tag-sector {
+  display:inline-block; padding:2px 8px; border-radius:4px;
+  font-size:11px; background:var(--bg-hover); color:var(--text-muted);
+}
+</style>
+
+<script>
+function fmt(n, d=2) {
+  if (n === null || n === undefined || isNaN(n)) return '-';
+  return Number(n).toFixed(d);
+}
+
+function colorClass(v) {
+  if (v > 0) return 'text-up';
+  if (v < 0) return 'text-down';
+  return '';
+}
+
+function scoreColor(s) {
+  if (s >= 60) return 'tag-up';
+  if (s >= 30) return 'tag-blue';
+  if (s >= 0) return '';
+  return 'tag-down';
+}
+
+async function runEtfScreen() {
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.textContent = '扫描中...';
+  document.getElementById('loadingCard').style.display = 'block';
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('emptyCard').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/etf/screen');
+    const data = await resp.json();
+
+    document.getElementById('loadingCard').style.display = 'none';
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('etfStats').textContent =
+      `扫描 ${data.total} 只，成功 ${data.matched} 只，耗时 ${data.elapsed}s`;
+
+    const etfs = data.etfs || [];
+    if (etfs.length === 0) {
+      document.getElementById('resultContent').innerHTML =
+        '<div class="empty-state"><p>暂无数据</p></div>';
+      return;
+    }
+
+    let html = `<table class="table">
+      <thead><tr>
+        <th>排名</th><th>板块</th><th>ETF名称</th><th>最新价</th>
+        <th>今日</th><th>近5日</th><th>近20日</th><th>近60日</th>
+        <th>量比</th><th>RSI6</th><th>综合评分</th><th>趋势</th><th>技术信号</th>
+      </tr></thead><tbody>`;
+
+    etfs.forEach((e, i) => {
+      const sigHtml = (e.signals || []).map(s =>
+        `<span class="tag tag-blue" style="margin:1px; font-size:10px; padding:1px 5px;">${s}</span>`
+      ).join('');
+
+      html += `<tr>
+        <td style="font-weight:600; color:var(--text-muted);">${i + 1}</td>
+        <td><span class="tag-sector">${e.sector}</span></td>
+        <td>
+          <div style="font-weight:600; cursor:pointer; color:var(--accent);"
+               onclick="location.href='/stock/${e.symbol}'">${e.name}</div>
+          <div style="font-size:11px; color:var(--text-muted);">${e.symbol.toUpperCase()}</div>
+        </td>
+        <td style="font-weight:600;">${fmt(e.price, 3)}</td>
+        <td class="${colorClass(e.change_pct)}" style="font-weight:600;">${fmt(e.change_pct)}%</td>
+        <td class="${colorClass(e.chg_5d)}">${fmt(e.chg_5d)}%</td>
+        <td class="${colorClass(e.chg_20d)}">${fmt(e.chg_20d)}%</td>
+        <td class="${colorClass(e.chg_60d)}">${fmt(e.chg_60d)}%</td>
+        <td>${fmt(e.vol_ratio)}</td>
+        <td>${fmt(e.rsi6, 1)}</td>
+        <td><span class="tag ${scoreColor(e.score)}" style="font-weight:600;">${e.score}</span></td>
+        <td style="font-size:12px;">${e.trend}</td>
+        <td><div style="max-width:180px;">${sigHtml || '-'}</div></td>
+      </tr>`;
+    });
+
+    html += '</tbody></table>';
+
+    // 强势板块总结
+    const topSectors = {};
+    etfs.slice(0, 10).forEach(e => {
+      if (!topSectors[e.sector]) topSectors[e.sector] = 0;
+      topSectors[e.sector]++;
+    });
+    const hotSectors = Object.entries(topSectors)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([s, c]) => `${s}(${c}只)`)
+      .join('、');
+
+    html = `<div style="padding:12px 16px; background:var(--bg-hover); border-radius:6px; margin-bottom:16px;">
+      <strong>🔥 强势板块：</strong>${hotSectors || '暂无明显强势板块'}
+      <span style="margin-left:16px; font-size:12px; color:var(--text-muted);">
+        评分前10中占比最高的板块
+      </span>
+    </div>` + html;
+
+    document.getElementById('resultContent').innerHTML = '<div class="table-wrapper">' + html + '</div>';
+
+  } catch (e) {
+    document.getElementById('loadingCard').style.display = 'none';
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('resultContent').innerHTML =
+      `<div class="empty-state"><p style="color:var(--text-down);">扫描失败：${e.message}</p></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '重新扫描';
+  }
+}
+
+// ========== AI 选ETF ==========
+async function runAIEtfScreen() {
+  const btn = document.getElementById('aiScanBtn');
+
+  // 隐藏其他结果
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('emptyCard').style.display = 'none';
+  document.getElementById('aiResultCard').style.display = 'none';
+  document.getElementById('aiLoadingCard').style.display = 'block';
+  btn.disabled = true;
+  btn.textContent = 'AI分析中...';
+
+  try {
+    const resp = await fetch('/api/ai/screen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pool: 'etf', top_n: 5 })
+    });
+    const data = await resp.json();
+
+    document.getElementById('aiLoadingCard').style.display = 'none';
+
+    if (data.error) {
+      document.getElementById('aiResultCard').style.display = 'block';
+      document.getElementById('aiResultContent').innerHTML = `<div class="empty-state"><p style="color:var(--text-down)">AI选ETF失败：${data.error}</p></div>`;
+      return;
+    }
+
+    const picks = data.picks || [];
+    document.getElementById('aiResultStats').textContent = `扫描${data.total_scanned}只，AI精选${picks.length}只`;
+
+    if (picks.length === 0) {
+      document.getElementById('aiResultContent').innerHTML = `<div class="empty-state"><p>AI 未选出符合条件的ETF，建议稍后再试</p></div>`;
+      document.getElementById('aiResultCard').style.display = 'block';
+      return;
+    }
+
+    let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+    picks.forEach((p, i) => {
+      const changeColor = p.change_pct >= 0 ? 'var(--text-up)' : 'var(--text-down)';
+      const confColor = p.confidence >= 80 ? '#10b981' : p.confidence >= 60 ? '#f59e0b' : '#6b7280';
+      html += `
+        <div style="background:var(--bg-secondary);border-radius:12px;padding:16px;border-left:4px solid ${confColor};cursor:pointer;" onclick="location.href='/stock/${p.symbol}'">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+            <div>
+              <div style="font-size:16px;font-weight:600;">
+                <span style="color:var(--text-muted);font-size:13px;margin-right:8px;">#${i+1}</span>${p.name}
+                <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">${p.symbol.toUpperCase()}</span>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:18px;font-weight:600;">${fmt(p.price)}</div>
+              <div style="font-size:13px;color:${changeColor};">${p.change_pct >= 0 ? '+' : ''}${fmt(p.change_pct)}%</div>
+            </div>
+          </div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;">
+            💡 ${p.reason}
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;">
+            <span style="color:var(--text-muted);">🎯 目标价: <span style="color:var(--text-up);font-weight:600;">${fmt(p.target_price)}</span></span>
+            <span style="color:var(--text-muted);">🛑 止损价: <span style="color:var(--text-down);font-weight:600;">${fmt(p.stop_loss)}</span></span>
+            <span style="color:var(--text-muted);">📊 看涨信心: <span style="color:${confColor};font-weight:600;">${p.confidence}%</span></span>
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+    html += `<div style="margin-top:12px;padding:10px;background:var(--bg-secondary);border-radius:8px;font-size:11px;color:var(--text-muted);text-align:center;">
+      ⚠️ AI选ETF仅供参考，不构成投资建议。市场有风险，投资需谨慎。
+    </div>`;
+
+    document.getElementById('aiResultContent').innerHTML = html;
+    document.getElementById('aiResultCard').style.display = 'block';
+
+  } catch (e) {
+    document.getElementById('aiLoadingCard').style.display = 'none';
+    document.getElementById('aiResultCard').style.display = 'block';
+    document.getElementById('aiResultContent').innerHTML = `<div class="empty-state"><p style="color:var(--text-down)">AI选ETF失败：${e.message}</p></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 AI选ETF';
+  }
+}
+</script>
+{% endblock %}

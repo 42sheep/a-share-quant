@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}A股量化分析系统{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    /* 全局搜索框 */
+    .global-search {
+      position: relative;
+      flex: 1;
+      max-width: 400px;
+      margin: 0 20px;
+    }
+    .global-search input {
+      width: 100%;
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .global-search input:focus {
+      border-color: var(--accent);
+    }
+    .global-search-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 4px;
+      max-height: 320px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .global-search-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .global-search-item:hover {
+      background: var(--bg-hover);
+    }
+    .global-search-item .info {
+      flex: 1;
+    }
+    .global-search-item .name {
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+    .global-search-item .code {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .global-search-item .symbol {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-right: 10px;
+    }
+    .global-search-item .add-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .global-search-item .add-btn:hover {
+      opacity: 0.9;
+    }
+    /* 手机端导航栏 */
+    @media (max-width: 768px) {
+      .navbar {
+        flex-wrap: wrap;
+        padding: 8px 12px;
+      }
+      .navbar-brand {
+        order: 1;
+      }
+      .global-search {
+        order: 3;
+        max-width: 100%;
+        margin: 8px 0 0 0;
+        width: 100%;
+      }
+      .navbar-nav {
+        order: 2;
+        margin-left: auto;
+      }
+      .navbar-nav li a {
+        padding: 6px 10px;
+        font-size: 13px;
+      }
+      .container {
+        padding: 12px;
+      }
+      .card {
+        margin-bottom: 12px;
+      }
+      .card-header {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      table {
+        font-size: 12px;
+      }
+      th, td {
+        padding: 8px 6px;
+      }
+      .btn {
+        padding: 8px 14px;
+        font-size: 14px;
+      }
+      .input {
+        font-size: 14px;
+        padding: 8px 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <div class="logo">Q</div>
+      <span>量化分析</span>
+    </div>
+    <div class="global-search">
+      <input type="text" id="globalSearchInput" placeholder="搜索股票名称/代码，如 茅台 或 600519" autocomplete="off">
+      <div class="global-search-dropdown" id="globalSearchDropdown"></div>
+    </div>
+    <ul class="navbar-nav">
+      <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">自选股</a></li>
+      <li><a href="/screener" class="{% if '/screener' in request.path %}active{% endif %}">选股参考</a></li>
+      <li><a href="/etf" class="{% if '/etf' in request.path %}active{% endif %}">板块ETF</a></li>
+    </ul>
+  </nav>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    // 全局搜索功能
+    (function() {
+      let searchTimer = null;
+      let searchResults = [];
+      let selectedIndex = -1;
+
+      const input = document.getElementById('globalSearchInput');
+      const dropdown = document.getElementById('globalSearchDropdown');
+
+      if (!input || !dropdown) return;
+
+      function renderDropdown() {
+        if (searchResults.length === 0) {
+          dropdown.style.display = 'none';
+          return;
+        }
+        let html = '';
+        searchResults.forEach(function(s, i) {
+          html += '<div class="global-search-item" data-index="' + i + '">' +
+            '<div class="info" onmousedown="event.preventDefault(); window._globalViewStock(' + i + ')">' +
+              '<div class="name">' + s.name + '</div>' +
+              '<div class="code">' + (s.pinyin ? s.pinyin.toUpperCase() + ' · ' : '') + (s.market === 'sh' ? '沪市' : '深市') + '</div>' +
+            '</div>' +
+            '<span class="symbol">' + s.symbol.toUpperCase() + '</span>' +
+            '<button class="add-btn" onmousedown="event.preventDefault(); event.stopPropagation(); window._globalAddStock(' + i + ')" title="添加到自选股">+</button>' +
+          '</div>';
+        });
+        dropdown.innerHTML = html;
+        dropdown.style.display = 'block';
+      }
+
+      function hideDropdown() {
+        dropdown.style.display = 'none';
+        searchResults = [];
+        selectedIndex = -1;
+      }
+
+      async function doSearch(keyword) {
+        if (!keyword || keyword.length < 1) {
+          hideDropdown();
+          return;
+        }
+        try {
+          var resp = await fetch('/api/search?q=' + encodeURIComponent(keyword) + '&limit=8');
+          var data = await resp.json();
+          searchResults = data.results || [];
+          selectedIndex = -1;
+          renderDropdown();
+        } catch(e) {
+          hideDropdown();
+        }
+      }
+
+      // 暴露给全局调用
+      window._globalViewStock = function(index) {
+        var s = searchResults[index];
+        if (!s) return;
+        hideDropdown();
+        input.value = '';
+        location.href = '/stock/' + s.symbol;
+      };
+
+      window._globalAddStock = async function(index) {
+        var s = searchResults[index];
+        if (!s) return;
+        try {
+          await fetch('/api/watchlist', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({symbol: s.symbol})
+          });
+          // 显示添加成功提示
+          var btn = event.target;
+          btn.textContent = '✓';
+          btn.style.background = '#10b981';
+          setTimeout(function() {
+            btn.textContent = '+';
+            btn.style.background = '';
+          }, 1500);
+        } catch(e) {
+          alert('添加失败：' + e.message);
+        }
+      };
+
+      input.addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        var val = this.value.trim();
+        if (/^(sh|sz)?\d{6}$/i.test(val)) {
+          // 纯代码直接跳转
+          return;
+        }
+        searchTimer = setTimeout(function() { doSearch(val); }, 200);
+      });
+
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (searchResults.length > 0) {
+            selectedIndex = (selectedIndex + 1) % searchResults.length;
+            var items = dropdown.querySelectorAll('.global-search-item');
+            items.forEach(function(el, i) {
+              el.style.background = i === selectedIndex ? 'var(--bg-hover)' : '';
+            });
+          }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (searchResults.length > 0) {
+            selectedIndex = selectedIndex <= 0 ? searchResults.length - 1 : selectedIndex - 1;
+            var items = dropdown.querySelectorAll('.global-search-item');
+            items.forEach(function(el, i) {
+              el.style.background = i === selectedIndex ? 'var(--bg-hover)' : '';
+            });
+          }
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (selectedIndex >= 0 && searchResults[selectedIndex]) {
+            window._globalViewStock(selectedIndex);
+          } else if (input.value.trim()) {
+            // 纯代码直接跳转
+            var code = input.value.trim();
+            if (/^\d{6}$/.test(code)) {
+              if (code.startsWith('6')) code = 'sh' + code;
+              else if (code.startsWith('0') || code.startsWith('3')) code = 'sz' + code;
+            }
+            location.href = '/stock/' + code;
+          }
+        } else if (e.key === 'Escape') {
+          hideDropdown();
+        }
+      });
+
+      // 点击外部关闭
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('#globalSearchInput') && !e.target.closest('#globalSearchDropdown')) {
+          hideDropdown();
+        }
+      });
+    })();
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -264,6 +264,7 @@
 
 <script>
 let scanning = false;
+let lastYaoguPicks = [];
 
 function startScan() {
   if (scanning) return;
@@ -295,6 +296,7 @@ function startScan() {
       return;
     }
 
+    lastYaoguPicks = data.picks || [];
     renderResults(data);
   })
   .catch(err => {
@@ -389,6 +391,11 @@ function renderResults(data) {
     html += '</tbody></table></div>';
   }
 
+  html += '<div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
+  html += '<button class="btn btn-primary" id="addBacktestBtn" onclick="addToBacktest()">📋 加入回测（次日自动验证涨停率）</button>';
+  html += '<span id="backtestStatus" style="font-size:12px;color:var(--text-muted)"></span>';
+  html += '</div>';
+
   html += '<div style="margin-top:20px;padding:12px;background:var(--bg-secondary);border-radius:8px;font-size:12px;color:var(--text-muted);line-height:1.8">';
   html += '📊 扫描统计：共扫描 ' + data.total_scanned + ' 只股票，技术初筛 ' + data.total_candidates + ' 只候选，AI 最终选出 ' + picks.length + ' 只。<br>';
   html += '⏰ 建议每日收盘后（15:00后）扫描，结果更准确。盘中扫描仅供参考。<br>';
@@ -396,6 +403,42 @@ function renderResults(data) {
   html += '</div>';
 
   document.getElementById('resultArea').innerHTML = html;
+}
+
+function addToBacktest() {
+  if (!lastYaoguPicks || lastYaoguPicks.length === 0) {
+    alert('没有选股结果可加入回测');
+    return;
+  }
+  const btn = document.getElementById('addBacktestBtn');
+  const status = document.getElementById('backtestStatus');
+  btn.disabled = true;
+  btn.textContent = '加入中...';
+  status.textContent = '';
+
+  const stocks = lastYaoguPicks.map(p => ({symbol: p.symbol, name: p.name || ''}));
+  fetch('/api/backtest/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({type: 'yaogu', stocks: stocks})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      btn.textContent = '✅ 已加入回测';
+      btn.style.background = 'var(--up-color)';
+      status.textContent = '已记录 ' + data.count + ' 只股票，次日收盘后自动回测';
+    } else {
+      btn.disabled = false;
+      btn.textContent = '📋 加入回测';
+      status.textContent = '失败：' + (data.error || '未知错误');
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.textContent = '📋 加入回测';
+    status.textContent = '失败：' + err.message;
+  });
 }
 </script>
 {% endblock %}

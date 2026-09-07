@@ -5,6 +5,7 @@ A股量化分析系统 - Flask 主程序
 import os
 import json
 import sqlite3
+from datetime import datetime
 from flask import Flask, render_template, request, jsonify, g
 
 # 启动时加载 .env 环境变量（密钥等敏感配置，不提交到代码库）
@@ -26,6 +27,7 @@ from ai_analysis import analyze_stock, general_chat, ai_screen_stocks
 from screener import screen_stocks, HOT_STOCKS, TOP100_STOCKS, screen_etfs, ETF_LIST
 from yaogu import scan_yaogu
 from backtest import init_backtest_db, save_screen_record, run_pending_backtests, get_backtest_stats, get_backtest_history, get_pending_records
+from admin_stats import get_server_stats, get_access_stats, get_app_stats, init_access_log_db
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -48,6 +50,29 @@ def close_db(exception):
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
+@app.after_request
+def log_access(response):
+    """记录访问日志（排除静态资源）"""
+    try:
+        path = request.path
+        if path.startswith('/static/') or path == '/favicon.ico':
+            return response
+        ip = request.remote_addr or 'unknown'
+        method = request.method
+        status = response.status_code
+        user_agent = request.headers.get('User-Agent', '')[:200]
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            'INSERT INTO access_logs (ip, path, method, status, user_agent) VALUES (?, ?, ?, ?, ?)',
+            (ip, path, method, status, user_agent)
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    return response
 
 
 def init_db():
@@ -76,6 +101,7 @@ def init_db():
 # 初始化数据库（自选股表 + 回测表）——在函数定义之后调用
 init_db()
 init_backtest_db()
+init_access_log_db(DB_PATH)
 
 
 # ============ 页面路由 ============
@@ -329,12 +355,6 @@ def api_yaogu_scan():
 
     result = scan_yaogu(stock_list=stock_list, top_n=top_n)
 
-    # 选股成功后自动保存记录（用于次日回测）
-    picks = result.get("picks", [])
-    if picks and "error" not in result:
-        record_stocks = [{"symbol": p["symbol"], "name": p.get("name", "")} for p in picks]
-        save_screen_record("yaogu", record_stocks)
-
     return jsonify(result)
 
 
@@ -451,11 +471,6 @@ def api_ai_screen():
         p["change_pct"] = q.get("change_pct", 0)
         p["name"] = q.get("name", p.get("name", ""))
 
-    # 选股成功后自动保存记录（用于次日回测）
-    if picks:
-        record_stocks = [{"symbol": p["symbol"], "name": p.get("name", "")} for p in picks]
-        save_screen_record("ai_screen", record_stocks)
-
     return jsonify({
         "total_candidates": len(candidates),
         "total_scanned": len(stocks_data),
@@ -495,6 +510,142 @@ def api_backtest_pending():
     """获取待回测记录"""
     pending = get_pending_records()
     return jsonify({"pending": pending, "count": len(pending)})
+
+
+@app.route("/api/backtest/add", methods=["POST"])
+def api_backtest_add():
+    """手动将选股结果加入回测（用户主动选择后才记录）"""
+    data = request.get_json() or {}
+    record_type = data.get("type", "manual")
+    stocks = data.get("stocks", [])
+
+    if not stocks:
+        return jsonify({"error": "股票列表为空"}), 400
+
+    record_stocks = [{"symbol": s["symbol"], "name": s.get("name", "")} for s in stocks]
+    record_id = save_screen_record(record_type, record_stocks)
+
+    return jsonify({"success": True, "record_id": record_id, "count": len(stocks)})
+
+
+@app.route("/admin")
+def admin_dashboard():
+    """后台管理仪表盘"""
+    return render_template("admin.html")
+
+
+@app.route("/api/admin/stats")
+def api_admin_stats():
+    """后台统计数据接口"""
+    server = get_server_stats()
+    access = get_access_stats(DB_PATH)
+    app_stats = get_app_stats(DB_PATH)
+    return jsonify({
+        'server': server,
+        'access': access,
+        'app': app_stats,
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    })
+
+
+@app.route("/api/admin/data")
+def api_admin_data():
+    """获取各表数据量和选股记录列表"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+
+    # 各表数据量
+    counts = {}
+    for table in ['watchlist', 'screen_records', 'backtest_results', 'access_logs']:
+        try:
+            c.execute(f'SELECT COUNT(*) FROM {table}')
+            counts[table] = c.fetchone()[0]
+        except Exception:
+            counts[table] = 0
+
+    # 选股记录列表（含股票明细）
+    screen_records = []
+    try:
+        c.execute('SELECT id, type, screen_date, created_at, stocks, backtested FROM screen_records ORDER BY id DESC LIMIT 50')
+        for row in c.fetchall():
+            record = dict(row)
+            # 解析股票明细并计算数量
+            try:
+                stocks_list = json.loads(record['stocks']) if record['stocks'] else []
+                record['stocks'] = stocks_list
+                record['stock_count'] = len(stocks_list)
+            except Exception:
+                record['stocks'] = []
+                record['stock_count'] = 0
+            # 回测结果统计
+            try:
+                c.execute('SELECT COUNT(*), AVG(change_pct), SUM(is_red), SUM(is_limit_up) FROM backtest_results WHERE record_id = ?', (record['id'],))
+                bt = c.fetchone()
+                record['backtest_count'] = bt[0]
+                record['avg_change'] = round(bt[1], 2) if bt[1] is not None else None
+                record['red_count'] = bt[2] or 0
+                record['limit_up_count'] = bt[3] or 0
+            except Exception:
+                record['backtest_count'] = 0
+            screen_records.append(record)
+    except Exception as e:
+        pass
+
+    conn.close()
+    return jsonify({'counts': counts, 'screen_records': screen_records})
+
+
+@app.route("/api/admin/delete", methods=["POST"])
+def api_admin_delete():
+    """删除数据：按类型清空或按ID删除单条"""
+    data = request.get_json() or {}
+    delete_type = data.get('type', '')
+    record_id = data.get('id')
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    deleted = 0
+
+    if record_id:
+        # 删除单条选股记录（同时删除关联回测结果）
+        c.execute('DELETE FROM backtest_results WHERE record_id = ?', (record_id,))
+        bt_deleted = c.rowcount
+        c.execute('DELETE FROM screen_records WHERE id = ?', (record_id,))
+        deleted = c.rowcount
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'deleted': deleted, 'backtest_deleted': bt_deleted, 'message': f'已删除选股记录 #{record_id} 及关联的 {bt_deleted} 条回测数据'})
+
+    type_map = {
+        'watchlist': '自选股',
+        'screen_records': '选股记录',
+        'backtest_results': '回测结果',
+        'access_logs': '访问日志',
+    }
+
+    if delete_type == 'all_business':
+        # 清空所有业务数据（自选股+选股记录+回测结果），保留访问日志
+        c.execute('DELETE FROM watchlist')
+        c.execute('DELETE FROM backtest_results')
+        c.execute('DELETE FROM screen_records')
+        deleted = c.rowcount
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': '已清空所有业务数据（自选股、选股记录、回测结果）'})
+
+    if delete_type in type_map:
+        c.execute(f'DELETE FROM {delete_type}')
+        deleted = c.rowcount
+        # 如果删的是选股记录，同时删回测结果
+        if delete_type == 'screen_records':
+            c.execute('DELETE FROM backtest_results')
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'deleted': deleted, 'message': f'已清空 {type_map[delete_type]}（{deleted} 条）'})
+
+    conn.close()
+    return jsonify({'error': '无效的删除类型'}), 400
 
 
 if __name__ == "__main__":

@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% block title %}后台管理 - A股量化分析系统{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">⚙️ 系统后台</h1>
+  <p class="page-subtitle">服务器状态 · 访问统计 · 资源消耗 · 实时监控</p>
+</div>
+
+<!-- 服务器状态 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">🖥️ 服务器状态</span>
+    <span id="serverUptime" class="tag" style="background:var(--bg-hover);color:var(--text-muted)">运行中</span>
+  </div>
+  <div class="stats-grid" id="serverStats">
+    <div class="stat-card"><div class="label">CPU 使用率</div><div class="value" id="cpuUsage">-</div><div class="progress-bar"><div class="progress-fill" id="cpuBar"></div></div></div>
+    <div class="stat-card"><div class="label">内存使用</div><div class="value" id="memUsage">-</div><div class="progress-bar"><div class="progress-fill" id="memBar"></div></div></div>
+    <div class="stat-card"><div class="label">磁盘使用</div><div class="value" id="diskUsage">-</div><div class="progress-bar"><div class="progress-fill" id="diskBar"></div></div></div>
+    <div class="stat-card"><div class="label">系统负载 (1/5/15min)</div><div class="value" id="loadAvg">-</div></div>
+    <div class="stat-card"><div class="label">运行时长</div><div class="value" id="uptime">-</div></div>
+    <div class="stat-card"><div class="label">进程数 / Gunicorn</div><div class="value" id="procCount">-</div></div>
+    <div class="stat-card"><div class="label">网络流量 (收/发)</div><div class="value" id="netTraffic">-</div></div>
+    <div class="stat-card"><div class="label">最后更新</div><div class="value" id="lastUpdate" style="font-size:14px;">-</div></div>
+  </div>
+</div>
+
+<!-- 访问统计 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">📊 访问统计</span>
+    <button class="btn btn-sm" onclick="loadStats()">刷新</button>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">总访问量</div><div class="value" id="totalAccess">-</div></div>
+    <div class="stat-card"><div class="label">今日访问</div><div class="value" id="todayAccess">-</div></div>
+    <div class="stat-card"><div class="label">独立 IP 数</div><div class="value" id="uniqueIps">-</div></div>
+    <div class="stat-card"><div class="label">访问日志总数</div><div class="value" id="accessLogCount">-</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+    <div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">📈 最近24小时访问趋势</div>
+      <div id="hourlyChart" style="height:260px;"></div>
+    </div>
+    <div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">🔥 热门页面 TOP10</div>
+      <div id="topPagesChart" style="height:260px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 应用资源 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">📦 应用资源消耗</span>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">自选股数量</div><div class="value" id="watchlistCount">-</div></div>
+    <div class="stat-card"><div class="label">选股记录数</div><div class="value" id="screenRecordCount">-</div></div>
+    <div class="stat-card"><div class="label">回测完成数</div><div class="value" id="backtestResultCount">-</div></div>
+    <div class="stat-card"><div class="label">数据库大小</div><div class="value" id="dbSize">-</div></div>
+  </div>
+</div>
+
+<!-- 数据管理 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">🗑️ 数据管理</span>
+    <button class="btn btn-sm btn-danger" onclick="clearAllData()" style="background:#ef4444;">清空所有业务数据</button>
+  </div>
+  <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
+    <div class="stat-card">
+      <div class="label">自选股</div>
+      <div class="value" id="countWatchlist">-</div>
+      <button class="btn btn-sm" onclick="clearData('watchlist')" style="margin-top:8px;width:100%;font-size:11px;padding:4px;">清空</button>
+    </div>
+    <div class="stat-card">
+      <div class="label">选股记录</div>
+      <div class="value" id="countScreenRecords">-</div>
+      <button class="btn btn-sm" onclick="clearData('screen_records')" style="margin-top:8px;width:100%;font-size:11px;padding:4px;">清空</button>
+    </div>
+    <div class="stat-card">
+      <div class="label">回测结果</div>
+      <div class="value" id="countBacktestResults">-</div>
+      <button class="btn btn-sm" onclick="clearData('backtest_results')" style="margin-top:8px;width:100%;font-size:11px;padding:4px;">清空</button>
+    </div>
+    <div class="stat-card">
+      <div class="label">访问日志</div>
+      <div class="value" id="countAccessLogs">-</div>
+      <button class="btn btn-sm" onclick="clearData('access_logs')" style="margin-top:8px;width:100%;font-size:11px;padding:4px;">清空</button>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">📋 选股记录列表（点击删除单条）</div>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead><tr>
+          <th>ID</th><th>类型</th><th>选股日期</th><th>股票数</th><th>回测状态</th><th>红盘/涨停</th><th>平均收益</th><th>操作</th>
+        </tr></thead>
+        <tbody id="screenRecordsBody">
+          <tr><td colspan="8" style="text-align:center;color:var(--text-muted);">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 最近访问记录 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">🕐 最近访问记录（20条）</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead><tr>
+        <th>时间</th><th>IP</th><th>方法</th><th>路径</th><th>状态</th>
+      </tr></thead>
+      <tbody id="recentAccessBody">
+        <tr><td colspan="5" style="text-align:center;color:var(--text-muted);">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:12px;">
+  数据每30秒自动刷新 · 服务器状态采集自 /proc 文件系统 · 访问日志存储于 SQLite
+</div>
+
+<script>
+let hourlyChart = null;
+let topPagesChart = null;
+
+function initCharts() {
+  hourlyChart = echarts.init(document.getElementById('hourlyChart'), 'dark');
+  topPagesChart = echarts.init(document.getElementById('topPagesChart'), 'dark');
+}
+
+function setProgress(barId, percent, color) {
+  const bar = document.getElementById(barId);
+  if (!bar) return;
+  bar.style.width = Math.min(percent, 100) + '%';
+  bar.style.background = color || (percent > 80 ? '#ef4444' : percent > 60 ? '#f59e0b' : '#10b981');
+}
+
+function loadStats() {
+  fetch('/api/admin/stats')
+    .then(r => r.json())
+    .then(data => {
+      // 服务器状态
+      const s = data.server;
+      document.getElementById('cpuUsage').textContent = s.cpu + '%';
+      setProgress('cpuBar', s.cpu);
+      document.getElementById('memUsage').textContent = s.memory.used_mb + '/' + s.memory.total_mb + 'MB (' + s.memory.percent + '%)';
+      setProgress('memBar', s.memory.percent);
+      document.getElementById('diskUsage').textContent = s.disk.used_gb + '/' + s.disk.total_gb + 'GB (' + s.disk.percent + '%)';
+      setProgress('diskBar', s.disk.percent);
+      document.getElementById('loadAvg').textContent = s.load['1min'] + ' / ' + s.load['5min'] + ' / ' + s.load['15min'];
+      document.getElementById('uptime').textContent = s.uptime.formatted;
+      document.getElementById('procCount').textContent = s.process_count + ' / ' + s.gunicorn_workers;
+      document.getElementById('netTraffic').textContent = '↓' + s.network.rx_mb + 'MB ↑' + s.network.tx_mb + 'MB';
+      document.getElementById('lastUpdate').textContent = data.timestamp;
+
+      // 访问统计
+      const a = data.access;
+      document.getElementById('totalAccess').textContent = a.total;
+      document.getElementById('todayAccess').textContent = a.today;
+      document.getElementById('uniqueIps').textContent = a.unique_ips;
+      document.getElementById('accessLogCount').textContent = a.total;
+
+      // 24小时趋势图
+      const hours = a.hourly.map(h => h.hour.split(' ')[1]);
+      const counts = a.hourly.map(h => h.count);
+      hourlyChart.setOption({
+        backgroundColor: 'transparent',
+        grid: {left: 40, right: 16, top: 20, bottom: 30},
+        xAxis: {type: 'category', data: hours, axisLabel: {fontSize: 10, color: '#888'}},
+        yAxis: {type: 'value', axisLabel: {fontSize: 10, color: '#888'}, splitLine: {lineStyle: {color: '#333'}}},
+        series: [{
+          type: 'line', data: counts, smooth: true,
+          lineStyle: {color: '#667eea', width: 2},
+          areaStyle: {color: {type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: 'rgba(102,126,234,0.4)'}, {offset: 1, color: 'rgba(102,126,234,0)'}]}},
+          itemStyle: {color: '#667eea'}
+        }]
+      });
+
+      // 热门页面图
+      const pages = a.top_pages.map(p => p.path);
+      const pageCounts = a.top_pages.map(p => p.count);
+      topPagesChart.setOption({
+        backgroundColor: 'transparent',
+        grid: {left: 100, right: 20, top: 10, bottom: 20},
+        xAxis: {type: 'value', axisLabel: {fontSize: 10, color: '#888'}, splitLine: {lineStyle: {color: '#333'}}},
+        yAxis: {type: 'category', data: pages.reverse(), axisLabel: {fontSize: 10, color: '#aaa', width: 90, overflow: 'truncate'}},
+        series: [{
+          type: 'bar', data: pageCounts.reverse(),
+          itemStyle: {color: {type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: [{offset: 0, color: '#764ba2'}, {offset: 1, color: '#667eea'}]}, borderRadius: [0, 4, 4, 0]},
+          barWidth: '60%'
+        }]
+      });
+
+      // 应用统计
+      const ap = data.app;
+      document.getElementById('watchlistCount').textContent = ap.watchlist_count || 0;
+      document.getElementById('screenRecordCount').textContent = ap.screen_record_count || 0;
+      document.getElementById('backtestResultCount').textContent = ap.backtest_result_count || 0;
+      document.getElementById('dbSize').textContent = ap.db_size_mb + ' MB';
+
+      // 最近访问记录
+      const tbody = document.getElementById('recentAccessBody');
+      if (a.recent && a.recent.length > 0) {
+        let html = '';
+        a.recent.forEach(r => {
+          const statusColor = r.status >= 500 ? 'color:#ef4444' : r.status >= 400 ? 'color:#f59e0b' : 'color:#10b981';
+          html += `<tr>
+            <td style="font-size:12px;">${r.created_at}</td>
+            <td style="font-size:12px;font-family:monospace;">${r.ip}</td>
+            <td><span class="tag" style="font-size:10px;">${r.method}</span></td>
+            <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.path}</td>
+            <td style="${statusColor};font-weight:600;">${r.status}</td>
+          </tr>`;
+        });
+        tbody.innerHTML = html;
+      } else {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">暂无访问记录</td></tr>';
+      }
+    })
+    .catch(err => {
+      console.error('加载统计失败:', err);
+    });
+}
+
+// ========== 数据管理 ==========
+function loadData() {
+  fetch('/api/admin/data')
+    .then(r => r.json())
+    .then(data => {
+      // 各表数据量
+      document.getElementById('countWatchlist').textContent = data.counts.watchlist || 0;
+      document.getElementById('countScreenRecords').textContent = data.counts.screen_records || 0;
+      document.getElementById('countBacktestResults').textContent = data.counts.backtest_results || 0;
+      document.getElementById('countAccessLogs').textContent = data.counts.access_logs || 0;
+
+      // 选股记录列表
+      const tbody = document.getElementById('screenRecordsBody');
+      if (data.screen_records && data.screen_records.length > 0) {
+        let html = '';
+        data.screen_records.forEach(r => {
+          const typeLabel = r.type === 'yaogu' ? '🔥 妖股' : r.type === 'ai_screen' ? '🤖 AI选股' : r.type;
+          const btStatus = r.backtested ? '<span style="color:#10b981;">已回测</span>' : '<span style="color:#f59e0b;">待回测</span>';
+          const redRate = r.backtest_count > 0 ? Math.round(r.red_count / r.backtest_count * 100) : 0;
+          const avgChange = r.avg_change !== null ? (r.avg_change > 0 ? '+' : '') + r.avg_change + '%' : '-';
+          const avgColor = r.avg_change !== null ? (r.avg_change > 0 ? 'color:#ef4444' : 'color:#10b981') : '';
+          html += `<tr>
+            <td>#${r.id}</td>
+            <td><span class="tag" style="font-size:11px;">${typeLabel}</span></td>
+            <td style="font-size:12px;">${r.screen_date || '-'}</td>
+            <td style="font-weight:600;">${r.stock_count || 0}只</td>
+            <td style="font-size:12px;">${btStatus}</td>
+            <td style="font-size:12px;">${r.red_count || 0}红 / ${r.limit_up_count || 0}涨停 (${redRate}%)</td>
+            <td style="${avgColor};font-weight:600;">${avgChange}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="deleteRecord(${r.id})" style="background:#ef4444;font-size:11px;padding:3px 8px;">删除</button></td>
+          </tr>`;
+        });
+        tbody.innerHTML = html;
+      } else {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">暂无选股记录</td></tr>';
+      }
+    })
+    .catch(err => {
+      console.error('加载数据失败:', err);
+    });
+}
+
+function clearData(type) {
+  const typeNames = {
+    'watchlist': '自选股',
+    'screen_records': '选股记录（含回测结果）',
+    'backtest_results': '回测结果',
+    'access_logs': '访问日志'
+  };
+  if (!confirm(`确定要清空所有${typeNames[type] || type}吗？此操作不可恢复！`)) return;
+
+  fetch('/api/admin/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({type: type})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message || '清空成功');
+      loadData();
+      loadStats();
+    } else {
+      alert('清空失败：' + (data.error || '未知错误'));
+    }
+  })
+  .catch(err => {
+    alert('清空失败：' + err.message);
+  });
+}
+
+function deleteRecord(id) {
+  if (!confirm(`确定要删除选股记录 #${id}吗？关联的回测数据也会一并删除。`)) return;
+
+  fetch('/api/admin/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: id})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message || '删除成功');
+      loadData();
+      loadStats();
+    } else {
+      alert('删除失败：' + (data.error || '未知错误'));
+    }
+  })
+  .catch(err => {
+    alert('删除失败：' + err.message);
+  });
+}
+
+function clearAllData() {
+  if (!confirm('确定要清空所有业务数据吗？\n\n将删除：自选股、选股记录、回测结果\n\n此操作不可恢复！')) return;
+
+  fetch('/api/admin/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({type: 'all_business'})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message || '清空成功');
+      loadData();
+      loadStats();
+    } else {
+      alert('清空失败：' + (data.error || '未知错误'));
+    }
+  })
+  .catch(err => {
+    alert('清空失败：' + err.message);
+  });
+}
+
+// 初始化
+window.addEventListener('load', () => {
+  initCharts();
+  loadStats();
+  loadData();
+  setInterval(loadStats, 30000);
+  setInterval(loadData, 30000);
+});
+
+// 窗口大小变化时重绘图表
+window.addEventListener('resize', () => {
+  if (hourlyChart) hourlyChart.resize();
+  if (topPagesChart) topPagesChart.resize();
+});
+</script>
+{% endblock %}

@@ -161,6 +161,7 @@ let customStocks = [];
 let customSearchTimer = null;
 let customSearchResults = [];
 let customSelectedIndex = -1;
+let lastAiPicks = [];
 
 function toggleCustomPool() {
   const pool = document.getElementById('c_pool').value;
@@ -480,6 +481,7 @@ async function runAIScreen() {
     }
 
     const picks = data.picks || [];
+    lastAiPicks = picks;
     document.getElementById('aiResultStats').textContent = `扫描${data.total_scanned}只，AI精选${picks.length}只`;
 
     if (picks.length === 0) {
@@ -518,6 +520,10 @@ async function runAIScreen() {
         </div>`;
     });
     html += '</div>';
+    html += `<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="addAiBacktestBtn" onclick="addAiToBacktest()" style="padding:8px 16px;font-size:13px;">📋 加入回测（次日自动验证）</button>
+      <span id="aiBacktestStatus" style="font-size:12px;color:var(--text-muted)"></span>
+    </div>`;
     html += `<div style="margin-top:12px;padding:10px;background:var(--bg-secondary);border-radius:8px;font-size:11px;color:var(--text-muted);text-align:center;">
       ⚠️ AI选股仅供参考，不构成投资建议。股市有风险，投资需谨慎。
     </div>`;
@@ -533,6 +539,42 @@ async function runAIScreen() {
     btn.disabled = false;
     btn.textContent = '🤖 AI智能选股';
   }
+}
+
+function addAiToBacktest() {
+  if (!lastAiPicks || lastAiPicks.length === 0) {
+    alert('没有选股结果可加入回测');
+    return;
+  }
+  const btn = document.getElementById('addAiBacktestBtn');
+  const status = document.getElementById('aiBacktestStatus');
+  btn.disabled = true;
+  btn.textContent = '加入中...';
+  status.textContent = '';
+
+  const stocks = lastAiPicks.map(p => ({symbol: p.symbol, name: p.name || ''}));
+  fetch('/api/backtest/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({type: 'ai_screen', stocks: stocks})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      btn.textContent = '✅ 已加入回测';
+      btn.style.background = 'var(--up-color)';
+      status.textContent = '已记录 ' + data.count + ' 只，次日收盘后自动回测';
+    } else {
+      btn.disabled = false;
+      btn.textContent = '📋 加入回测';
+      status.textContent = '失败：' + (data.error || '未知错误');
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.textContent = '📋 加入回测';
+    status.textContent = '失败：' + err.message;
+  });
 }
 </script>
 {% endblock %}

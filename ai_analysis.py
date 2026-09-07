@@ -172,7 +172,7 @@ def ai_screen_stocks(stocks_data, top_n=5, asset_type="stock"):
         
         line = f"""【{i}】{s.get('name','')}（{s.get('symbol','')}）
 - 现价: {s.get('price',0):.2f}（{s.get('change_pct',0):+.2f}%）
-- 均线: MA5={s.get('ma5',0):.2f} MA20={s.get('ma20',0):.2f} MA60={s.get('ma60',0):.2f}
+- 均线: MA5={s.get('ma5',0):.2f} MA8={s.get('ma8',0):.2f} MA10={s.get('ma10',0):.2f} MA20={s.get('ma20',0):.2f} MA24={s.get('ma24',0):.2f} MA60={s.get('ma60',0):.2f}
 - MACD: DIF={s.get('dif',0):.4f} DEA={s.get('dea',0):.4f} 柱={s.get('macd',0):.4f}
 - RSI: RSI6={s.get('rsi6',0):.1f} RSI12={s.get('rsi12',0):.1f}
 - KDJ: K={s.get('kdj_k',0):.1f} D={s.get('kdj_d',0):.1f} J={s.get('kdj_j',0):.1f}
@@ -189,12 +189,12 @@ def ai_screen_stocks(stocks_data, top_n=5, asset_type="stock"):
 你的任务是从提供的{asset_name}列表中，选出后期走势大概率往上的{top_n}只。
 
 选股标准（按重要性排序）：
-1. 趋势确认：价格站上MA5/MA20/MA60，均线多头排列
+1. 趋势确认：价格站上MA5/MA20/MA60，均线多头排列；MA8上穿/位于MA24上方为加分
 2. MACD信号：DIF>DEA，MACD柱由负转正或持续放大，DIF上穿0轴
 3. 量能配合：近期放量上涨，量比>1，资金流入
 4. RSI适中：RSI6在40-70之间（不超买也不超卖）
 5. KDJ信号：K线上穿D线（金叉），J值在合理区间
-6. 技术信号：出现买入信号（金叉、突破、放量等）
+6. 技术信号：出现买入信号（金叉、突破、放量、MA8金叉MA24等）
 7. 综合评分高
 
 输出要求：

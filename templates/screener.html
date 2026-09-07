@@ -23,8 +23,11 @@
     <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px;">📈 趋势确认</div>
     <div class="condition-group">
       <div class="condition-item"><input type="checkbox" id="c_above_ma20" checked><label for="c_above_ma20">站上20日线</label></div>
+      <div class="condition-item"><input type="checkbox" id="c_above_ma24"><label for="c_above_ma24">站上24日线</label></div>
       <div class="condition-item"><input type="checkbox" id="c_above_ma60"><label for="c_above_ma60">站上60日线（中期趋势）</label></div>
       <div class="condition-item"><input type="checkbox" id="c_ma_bullish"><label for="c_ma_bullish">均线多头排列（MA5>10>20）</label></div>
+      <div class="condition-item"><input type="checkbox" id="c_ma8_above_ma24"><label for="c_ma8_above_ma24">MA8&gt;MA24（8日线在24日线上方）</label></div>
+      <div class="condition-item"><input type="checkbox" id="c_ma8_cross_ma24"><label for="c_ma8_cross_ma24">MA8上穿MA24（金叉）</label></div>
       <div class="condition-item"><input type="checkbox" id="c_boll_above_mid"><label for="c_boll_above_mid">布林带站上中轨</label></div>
     </div>
   </div>
@@ -296,10 +299,12 @@ function loadPreset(type) {
     document.getElementById('c_volume_surge').checked = true;
     document.getElementById('c_min_score').value = 10;
   } else if (type === 'strong') {
-    // 强势：多头排列 + 站上60日 + MACD零上 + 放量 + 高评分
+    // 强势：多头排列 + 站上60日 + MACD零上 + 放量 + 高评分 + MA8/24
     document.getElementById('c_above_ma20').checked = true;
+    document.getElementById('c_above_ma24').checked = true;
     document.getElementById('c_above_ma60').checked = true;
     document.getElementById('c_ma_bullish').checked = true;
+    document.getElementById('c_ma8_above_ma24').checked = true;
     document.getElementById('c_macd_gold').checked = true;
     document.getElementById('c_macd_above_zero').checked = true;
     document.getElementById('c_volume_surge').checked = true;
@@ -336,8 +341,11 @@ async function runScreener() {
 
   const conditions = {
     above_ma20: document.getElementById('c_above_ma20').checked,
+    above_ma24: document.getElementById('c_above_ma24').checked,
     above_ma60: document.getElementById('c_above_ma60').checked,
     ma_bullish: document.getElementById('c_ma_bullish').checked,
+    ma8_above_ma24: document.getElementById('c_ma8_above_ma24').checked,
+    ma8_cross_ma24: document.getElementById('c_ma8_cross_ma24').checked,
     boll_above_mid: document.getElementById('c_boll_above_mid').checked,
     macd_gold_cross: document.getElementById('c_macd_gold').checked,
     macd_above_zero: document.getElementById('c_macd_above_zero').checked,

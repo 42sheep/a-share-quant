@@ -4,7 +4,7 @@ MA、MACD、RSI、成交量均线、支撑压力位
 """
 
 
-def calc_ma(close_list, periods=[5, 10, 20, 60]):
+def calc_ma(close_list, periods=[5, 8, 10, 20, 24, 60]):
     """计算移动平均线，返回 {period: [values]}"""
     result = {}
     n = len(close_list)
@@ -288,6 +288,19 @@ def analyze_indicators(kline_data):
         elif prev["close"] >= prev["ma20"] and latest["close"] < latest["ma20"]:
             signals.append({"type": "below_ma20", "name": "跌破20日线", "strength": "medium", "desc": "股价跌破20日均线，中期趋势转弱"})
 
+    # MA8/24 均线系统（经典短线趋势信号）
+    if latest.get("ma8") is not None and latest.get("ma24") is not None:
+        if prev.get("ma8") is not None and prev.get("ma24") is not None:
+            if prev["ma8"] <= prev["ma24"] and latest["ma8"] > latest["ma24"]:
+                signals.append({"type": "ma8_cross_ma24", "name": "MA8上穿MA24", "strength": "strong", "desc": f"8日均线{latest['ma8']:.2f}上穿24日均线{latest['ma24']:.2f}，中期趋势转多"})
+            elif prev["ma8"] >= prev["ma24"] and latest["ma8"] < latest["ma24"]:
+                signals.append({"type": "ma8_death_ma24", "name": "MA8下穿MA24", "strength": "strong", "desc": f"8日均线{latest['ma8']:.2f}下穿24日均线{latest['ma24']:.2f}，中期趋势转空"})
+        # 股价站上/跌破 24 日均线
+        if prev["close"] <= prev["ma24"] and latest["close"] > latest["ma24"]:
+            signals.append({"type": "above_ma24", "name": "站上24日线", "strength": "medium", "desc": f"股价突破24日均线{latest['ma24']:.2f}，趋势转强"})
+        elif prev["close"] >= prev["ma24"] and latest["close"] < latest["ma24"]:
+            signals.append({"type": "below_ma24", "name": "跌破24日线", "strength": "medium", "desc": f"股价跌破24日均线{latest['ma24']:.2f}，趋势转弱"})
+
     # 成交量放大
     if latest.get("vol_ma5") and latest.get("vol_ma20") and latest["vol_ma20"] > 0:
         vol_ratio = latest["vol_ma5"] / latest["vol_ma20"]
@@ -343,8 +356,10 @@ def analyze_indicators(kline_data):
             "close": latest["close"],
             "change_pct": change_pct,
             "ma5": latest.get("ma5"),
+            "ma8": latest.get("ma8"),
             "ma10": latest.get("ma10"),
             "ma20": latest.get("ma20"),
+            "ma24": latest.get("ma24"),
             "ma60": latest.get("ma60"),
             "dif": latest.get("dif"),
             "dea": latest.get("dea"),

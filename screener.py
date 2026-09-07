@@ -75,8 +75,11 @@ def screen_stocks(stock_list=None, conditions=None, max_workers=8):
     cond = {
         # 趋势类
         "above_ma20": conditions.get("above_ma20", True),
+        "above_ma24": conditions.get("above_ma24", False),
         "above_ma60": conditions.get("above_ma60", False),
         "ma_bullish": conditions.get("ma_bullish", False),
+        "ma8_above_ma24": conditions.get("ma8_above_ma24", False),
+        "ma8_cross_ma24": conditions.get("ma8_cross_ma24", False),
         "boll_above_mid": conditions.get("boll_above_mid", False),
         # MACD 类
         "macd_gold_cross": conditions.get("macd_gold_cross", True),
@@ -123,6 +126,11 @@ def screen_stocks(stock_list=None, conditions=None, max_workers=8):
                 if latest["ma20"] and latest["close"] < latest["ma20"]:
                     return None
 
+            # 站上 24 日线
+            if cond["above_ma24"]:
+                if latest["ma24"] and latest["close"] < latest["ma24"]:
+                    return None
+
             # 站上 60 日线
             if cond["above_ma60"]:
                 if latest["ma60"] and latest["close"] < latest["ma60"]:
@@ -131,6 +139,16 @@ def screen_stocks(stock_list=None, conditions=None, max_workers=8):
             # 均线多头排列
             if cond["ma_bullish"]:
                 if "ma_bullish" not in signal_types:
+                    return None
+
+            # MA8 上穿 MA24（金叉）
+            if cond["ma8_cross_ma24"]:
+                if "ma8_cross_ma24" not in signal_types:
+                    return None
+
+            # MA8 > MA24（8日均线在24日均线之上）
+            if cond["ma8_above_ma24"]:
+                if latest.get("ma8") is None or latest.get("ma24") is None or latest["ma8"] <= latest["ma24"]:
                     return None
 
             # 布林带站上中轨
@@ -216,7 +234,10 @@ def screen_stocks(stock_list=None, conditions=None, max_workers=8):
                 "trend": summary["trend"],
                 "signals": signals,
                 "ma5": latest["ma5"],
+                "ma8": latest.get("ma8"),
+                "ma10": latest.get("ma10"),
                 "ma20": latest["ma20"],
+                "ma24": latest.get("ma24"),
                 "ma60": latest.get("ma60"),
                 "dif": latest["dif"],
                 "dea": latest["dea"],
